@@ -1,0 +1,27 @@
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/auth_db?options=-c%20TimeZone=Asia/Kolkata
+    username: postgres
+    password: postgres
+
+  jpa:
+    hibernate:
+      ddl-auto: validate # using validate beacuse flyway will handle schema changes and we don't want hibernate to auto-create or update the schema
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+    show-sql: true
+
+  flyway:
+    enabled: true
+
+auth:
+  jwt:
+    issuer: mockbridge-auth
+    access-token-minutes: 15
+    refresh-token-days: 7
+    secret: CHANGE_THIS_TO_A_VERY_LONG_SECRET_KEY_1234567890
