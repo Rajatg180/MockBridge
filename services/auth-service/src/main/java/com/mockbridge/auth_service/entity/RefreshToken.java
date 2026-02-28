@@ -28,7 +28,7 @@ public class RefreshToken {
      * This is allowed because both tables are in same service.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = false) // FK to users table
     private User user;
 
     @Column(nullable = false, unique = true, length = 500)
