@@ -19,7 +19,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * Extracts Bearer token, verifies it, and sets Spring Security Authentication.
+ * Extracts Bearer token, verifies it, and sets Spring Security Authentication (means request is authenticated).
  */
 public class JwtAuthFilter extends OncePerRequestFilter {
 

@@ -5,6 +5,8 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+      TZ: Asia/Kolkata
+      PGTZ: Asia/Kolkata
     ports:
       - "5433:5432"
     volumes:
