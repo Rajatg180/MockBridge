@@ -7,23 +7,43 @@ spring:
 
   cloud:
     gateway:
+
+      # ===============================
+      # ROUTE DEFINITIONS
+      # ===============================
       routes:
-        # Route Auth Service
+
+        # Auth Service (Public)
         - id: auth-service
           uri: http://localhost:8081
           predicates:
             - Path=/auth/**
-        # /me reserive in auth service
-        - id: auth-service-me
+        
+        # Me endpoint (Protected)
+        - id: auth-me
           uri: http://localhost:8081
           predicates:
             - Path=/me/**
 
-        # router services route can be added here in the future
+      # ===============================
+      # GLOBAL CORS CONFIG (React)
+      # ===============================
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:5173"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
 
-      # (Optional) good defaults
+      # Optional but useful
       default-filters:
-        # Remove duplicated headers issues in some setups
         - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
 
 management:
@@ -32,8 +52,6 @@ management:
       exposure:
         include: health,info
 
-# must be the same as in auth-service for JWT validation
 auth:
   jwt:
-    issuer: mockbridge-auth
     secret: CHANGE_THIS_TO_A_VERY_LONG_SECRET_KEY_1234567890
