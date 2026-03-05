@@ -19,15 +19,12 @@ spring:
   flyway:
     enabled: true
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          # same secret used by auth-service JWT signing
-          secret-key: CHANGE_THIS_TO_A_VERY_LONG_SECRET_KEY_1234567890
-
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+
+auth:
+  jwt:
+    secret: CHANGE_THIS_TO_A_VERY_LONG_SECRET_KEY_1234567890

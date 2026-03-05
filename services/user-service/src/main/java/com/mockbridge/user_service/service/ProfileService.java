@@ -4,8 +4,11 @@ import com.mockbridge.user_service.dto.*;
 import com.mockbridge.user_service.entity.Profile;
 import com.mockbridge.user_service.entity.Proficiency;
 import com.mockbridge.user_service.entity.Skill;
+import com.mockbridge.user_service.exception.ConflictException;
+import com.mockbridge.user_service.exception.NotFoundException;
 import com.mockbridge.user_service.repository.ProfileRepository;
 import com.mockbridge.user_service.repository.SkillRepository;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,10 +31,9 @@ public class ProfileService {
     public ProfileResponse createMyProfile(UUID userId, String email, String role, CreateProfileRequest req) {
 
         if (profileRepo.findByUserId(userId).isPresent()) {
-            throw new IllegalArgumentException("Profile already exists");
+            throw new ConflictException("Profile already exists");
         }
 
-        // Interviewer rules (optional but strong for your platform)
         if ("INTERVIEWER".equalsIgnoreCase(role)) {
             if (req.getYearsOfExperience() <= 0) {
                 throw new IllegalArgumentException("Interviewer must have yearsOfExperience > 0");
@@ -56,10 +58,8 @@ public class ProfileService {
         profile.setCreatedAt(now);
         profile.setUpdatedAt(now);
 
-        // save profile first
         profileRepo.save(profile);
 
-        // skills (optional)
         if (req.getSkills() != null) {
             for (CreateSkillRequest s : req.getSkills()) {
                 addSkillInternal(profile, s);
@@ -72,16 +72,15 @@ public class ProfileService {
     @Transactional(readOnly = true)
     public ProfileResponse getMyProfile(UUID userId) {
         Profile profile = profileRepo.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Profile not found. Create it first."));
+                .orElseThrow(() -> new NotFoundException("Profile not found. Create it first."));
         return toResponse(profile);
     }
 
     @Transactional
     public ProfileResponse updateMyProfile(UUID userId, String email, String role, UpdateProfileRequest req) {
         Profile profile = profileRepo.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Profile not found. Create it first."));
+                .orElseThrow(() -> new NotFoundException("Profile not found. Create it first."));
 
-        // keep role/email synced with JWT (important when admin promotes user later)
         profile.setEmail(email);
         profile.setRole(role);
 
@@ -98,12 +97,11 @@ public class ProfileService {
     @Transactional
     public SkillResponse addMySkill(UUID userId, CreateSkillRequest req) {
         Profile profile = profileRepo.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Profile not found. Create it first."));
+                .orElseThrow(() -> new NotFoundException("Profile not found. Create it first."));
 
-        // prevent duplicates per profile
-        String normalized = req.getSkillName().trim();
-        if (skillRepo.findByProfile_IdAndSkillNameIgnoreCase(profile.getId(), normalized).isPresent()) {
-            throw new IllegalArgumentException("Skill already exists");
+        String name = req.getSkillName().trim();
+        if (skillRepo.findByProfile_IdAndSkillNameIgnoreCase(profile.getId(), name).isPresent()) {
+            throw new ConflictException("Skill already exists");
         }
 
         Skill skill = addSkillInternal(profile, req);
@@ -113,10 +111,10 @@ public class ProfileService {
     @Transactional
     public void deleteMySkill(UUID userId, UUID skillId) {
         Profile profile = profileRepo.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Profile not found. Create it first."));
+                .orElseThrow(() -> new NotFoundException("Profile not found. Create it first."));
 
         Skill skill = skillRepo.findById(skillId)
-                .orElseThrow(() -> new IllegalArgumentException("Skill not found"));
+                .orElseThrow(() -> new NotFoundException("Skill not found"));
 
         if (!skill.getProfile().getId().equals(profile.getId())) {
             throw new IllegalArgumentException("You cannot delete someone else's skill");
@@ -128,7 +126,7 @@ public class ProfileService {
     @Transactional(readOnly = true)
     public ProfileResponse getPublicProfile(UUID userId) {
         Profile profile = profileRepo.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
+                .orElseThrow(() -> new NotFoundException("Profile not found"));
         return toResponse(profile);
     }
 
@@ -138,10 +136,8 @@ public class ProfileService {
             throw new IllegalArgumentException("skill query param is required");
         }
 
-        // Find all matching skills, then filter profiles that are INTERVIEWER
         List<Skill> matches = skillRepo.findBySkillNameIgnoreCase(skill.trim());
 
-        // Avoid duplicates
         Map<UUID, Profile> uniqueProfiles = new LinkedHashMap<>();
         for (Skill s : matches) {
             Profile p = s.getProfile();
@@ -153,10 +149,11 @@ public class ProfileService {
         return uniqueProfiles.values().stream().map(this::toResponse).toList();
     }
 
-    // ----------------- helpers -----------------
+    // ---------- helpers ----------
 
     private Skill addSkillInternal(Profile profile, CreateSkillRequest req) {
         String name = req.getSkillName().trim();
+
         Proficiency proficiency;
         try {
             proficiency = Proficiency.valueOf(req.getProficiency().trim().toUpperCase());

@@ -4,11 +4,11 @@ import java.time.LocalDateTime;
 
 public class ApiErrorResponse {
 
-    private LocalDateTime timestamp;
-    private int status;
-    private String error;
-    private String message;
-    private String path;
+    private final LocalDateTime timestamp;
+    private final int status;
+    private final String error;
+    private final String message;
+    private final String path;
 
     public ApiErrorResponse(int status, String error, String message, String path) {
         this.timestamp = LocalDateTime.now();

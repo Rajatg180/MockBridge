@@ -26,7 +26,9 @@ public class ProfileController {
         return ResponseEntity.ok("User Service is healthy");
     }
 
-    // ✅ Create profile once (onboarding)
+    //Create profile once (onboarding)
+    // the AuthenticationPrincipal annotation allows us to access the authenticated user's JWT claims direcltly
+    // authentication is handled b
     @PostMapping("/me")
     public ProfileResponse createMyProfile(@AuthenticationPrincipal Jwt jwt,
                                           @Valid @RequestBody CreateProfileRequest req) {

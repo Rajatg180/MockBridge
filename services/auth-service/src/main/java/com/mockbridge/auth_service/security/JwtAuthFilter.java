@@ -18,15 +18,18 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-/**
- * Extracts Bearer token, verifies it, and sets Spring Security Authentication (means request is authenticated).
- */
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtVerifier verifier;
 
     public JwtAuthFilter(JwtVerifier verifier) {
         this.verifier = verifier;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.startsWith("/auth/") || path.startsWith("/actuator/");
     }
 
     @Override
@@ -47,11 +50,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
                 UUID userId = UUID.fromString(claims.getSubject());
                 String email = (String) claims.getClaim("email");
-                String role = (String) claims.getClaim("role"); // e.g. STUDENT
+                String role = (String) claims.getClaim("role");
 
-                // Spring Security expects roles as "ROLE_X"
                 var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
-
                 var principal = new AuthenticatedUser(userId, email, role);
 
                 var authentication = new UsernamePasswordAuthenticationToken(
@@ -62,7 +63,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (Exception ex) {
-                // Invalid token → clear context (treat as unauthenticated)
                 SecurityContextHolder.clearContext();
             }
         }

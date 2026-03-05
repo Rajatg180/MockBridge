@@ -8,13 +8,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-// this filter extracts user information from the JWT and adds it to the request headers before forwarding to downstream services
+// This filter extracts user info from JWT and adds it to downstream request headers
+// first request goes 
 @Component
 public class JwtRelayFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange,
-                             org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
+                            org.springframework.cloud.gateway.filter.GatewayFilterChain chain) {
 
         return ReactiveSecurityContextHolder.getContext()
                 .flatMap(context -> {
@@ -27,11 +28,11 @@ public class JwtRelayFilter implements GlobalFilter, Ordered {
                         String role = jwt.getClaimAsString("role");
 
                         ServerWebExchange mutatedExchange = exchange.mutate()
-                                .request(builder -> builder
-                                        .header("X-User-Id", userId)
-                                        .header("X-User-Email", email)
-                                        .header("X-User-Role", role)
-                                )
+                                .request(builder -> {
+                                    if (userId != null) builder.header("X-User-Id", userId);
+                                    if (email != null) builder.header("X-User-Email", email);
+                                    if (role != null) builder.header("X-User-Role", role);
+                                })
                                 .build();
 
                         return chain.filter(mutatedExchange);

@@ -1,22 +1,27 @@
 package com.mockbridge.auth_service.config;
 
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.http.HttpStatus;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mockbridge.auth_service.exception.ErrorResponse;
 import com.mockbridge.auth_service.security.JwtAuthFilter;
 import com.mockbridge.auth_service.service.JwtVerifier;
 
-/**
- * Security setup:
- * - /auth/** is public
- * - everything else requires a valid JWT (Bearer token)
- */
+import jakarta.servlet.http.HttpServletRequest;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
 @Configuration
 public class SecurityConfig {
 
@@ -31,32 +36,38 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthFilter jwtAuthFilter) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   JwtAuthFilter jwtAuthFilter,
+                                                   ObjectMapper objectMapper) throws Exception {
+
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
+
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/auth/register",
-                                "/auth/login",
-                                "/auth/refresh",
-                                "/auth/logout")
-                        .permitAll()
-                        .anyRequest().authenticated())
-                // our JWT filter runs before Spring's default auth filter
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers("/actuator/**").permitAll()
+                        .anyRequest().authenticated()
+                )
+
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-                .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                            response.setContentType("application/json");
-                            response.getWriter().write("""
-                                        {
-                                          "error": "Unauthorized",
-                                          "message": "Authentication required"
-                                        }
-                                    """);
-                        }))
+
+                .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
+                    response.setContentType("application/json");
+
+                    ErrorResponse body = new ErrorResponse(
+                            HttpStatus.UNAUTHORIZED.value(),
+                            "Unauthorized",
+                            "Authentication required",
+                            ((HttpServletRequest) request).getRequestURI()
+                    );
+
+                    response.getWriter().write(objectMapper.writeValueAsString(body));
+                }))
+
                 .build();
     }
 }

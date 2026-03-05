@@ -6,7 +6,7 @@ import java.time.Instant;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.mockbridge.auth_service.exception.UnauthorizedException;
 import com.mockbridge.auth_service.config.JwtProperties;
 import com.mockbridge.auth_service.dto.AuthResponse;
 import com.mockbridge.auth_service.dto.LoginRequest;
@@ -124,14 +124,14 @@ public class AuthService {
 
         RefreshToken token = refreshRepo
                 .findByToken(refreshTokenValue)
-                .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
+                .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
 
         if (token.isRevoked()) {
-            throw new RuntimeException("Refresh token revoked");
+            throw new UnauthorizedException("Refresh token revoked");
         }
 
         if (token.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Refresh token expired");
+            throw new UnauthorizedException("Refresh token expired");
         }
 
         User user = token.getUser();
