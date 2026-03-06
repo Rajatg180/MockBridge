@@ -34,14 +34,14 @@ public class ProfileService {
             throw new ConflictException("Profile already exists");
         }
 
-        if ("INTERVIEWER".equalsIgnoreCase(role)) {
-            if (req.getYearsOfExperience() <= 0) {
-                throw new IllegalArgumentException("Interviewer must have yearsOfExperience > 0");
-            }
-            if (req.getSkills() == null || req.getSkills().isEmpty()) {
-                throw new IllegalArgumentException("Interviewer must add at least 1 skill");
-            }
-        }
+        // if ("INTERVIEWER".equalsIgnoreCase(role)) {
+        //     if (req.getYearsOfExperience() <= 0) {
+        //         throw new IllegalArgumentException("Interviewer must have yearsOfExperience > 0");
+        //     }
+        //     if (req.getSkills() == null || req.getSkills().isEmpty()) {
+        //         throw new IllegalArgumentException("Interviewer must add at least 1 skill");
+        //     }
+        // }
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -141,7 +141,12 @@ public class ProfileService {
         Map<UUID, Profile> uniqueProfiles = new LinkedHashMap<>();
         for (Skill s : matches) {
             Profile p = s.getProfile();
-            if (p != null && "INTERVIEWER".equalsIgnoreCase(p.getRole())) {
+            // if (p != null && "INTERVIEWER".equalsIgnoreCase(p.getRole())) {
+            //     uniqueProfiles.putIfAbsent(p.getUserId(), p);
+            // }
+            
+            // For simplicity, we won't filter by role here. If they have the skill, we consider them an interviewer.
+            if (p != null ) {
                 uniqueProfiles.putIfAbsent(p.getUserId(), p);
             }
         }

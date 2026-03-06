@@ -62,7 +62,7 @@ public class AuthService {
         user.setId(UUID.randomUUID());
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
-        user.setRole(Role.STUDENT); // default role for new users
+        user.setRole(Role.USER); // default role for new users
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
 
