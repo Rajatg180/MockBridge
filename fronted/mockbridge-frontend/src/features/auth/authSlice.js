@@ -1,61 +1,185 @@
-import { createSlice } from "@reduxjs/toolkit";
-import { tokenStorage } from "./tokenStorage";
+import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
+import { api } from '../../lib/http';
+import { clearPersistedState, getPersistedState } from '../../lib/storage';
+import { extractUserFromAccessToken } from '../../lib/jwt';
+import { getApiErrorMessage } from '../../lib/error';
 
-function decodeJwtPayload(token) {
-  try {
-    const payload = token.split(".")[1];
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const json = atob(normalized);
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
+const persisted = getPersistedState();
+const persistedAuth = persisted.auth || {};
+
+const initialState = {
+  accessToken: persistedAuth.accessToken || null,
+  refreshToken: persistedAuth.refreshToken || null,
+  user: persistedAuth.accessToken ? extractUserFromAccessToken(persistedAuth.accessToken) : null,
+  status: 'idle',
+  bootStatus: 'idle',
+  error: null,
+  initialized: false,
+};
+
+export const loginUser = createAsyncThunk(
+  'auth/loginUser',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await api.post('/auth/login', payload);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(getApiErrorMessage(error, 'Login failed.'));
+    }
+  },
+);
+
+export const registerUser = createAsyncThunk(
+  'auth/registerUser',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await api.post('/auth/register', payload);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(getApiErrorMessage(error, 'Registration failed.'));
+    }
+  },
+);
+
+export const bootstrapSession = createAsyncThunk(
+  'auth/bootstrapSession',
+  async (_, { getState, rejectWithValue }) => {
+    const state = getState();
+    const refreshToken = state.auth.refreshToken || persistedAuth.refreshToken;
+
+    if (!refreshToken) {
+      return { accessToken: null, refreshToken: null };
+    }
+
+    try {
+      const response = await api.post('/auth/refresh', { refreshToken });
+      return {
+        accessToken: response.data.accessToken,
+        refreshToken: response.data.refreshToken || refreshToken,
+      };
+    } catch (error) {
+      return rejectWithValue(getApiErrorMessage(error, 'Session restore failed.'));
+    }
+  },
+);
+
+export const logoutUser = createAsyncThunk(
+  'auth/logoutUser',
+  async (_, { getState }) => {
+    const refreshToken = getState().auth.refreshToken;
+
+    try {
+      if (refreshToken) {
+        await api.post('/auth/logout', { refreshToken });
+      }
+    } finally {
+      return true;
+    }
+  },
+);
+
+function applyTokens(state, payload) {
+  state.accessToken = payload?.accessToken || null;
+  state.refreshToken = payload?.refreshToken || null;
+  state.user = payload?.accessToken ? extractUserFromAccessToken(payload.accessToken) : null;
 }
-
-function buildUser(accessToken) {
-  if (!accessToken) return null;
-  const p = decodeJwtPayload(accessToken);
-  if (!p) return null;
-  return {
-    userId: p.sub,
-    email: p.email,
-    role: p.role,
-    exp: p.exp,
-  };
-}
-
-const initialAccess = tokenStorage.getAccess();
-const initialRefresh = tokenStorage.getRefresh();
 
 const authSlice = createSlice({
-  name: "auth",
-  initialState: {
-    accessToken: initialAccess,
-    refreshToken: initialRefresh,
-    user: buildUser(initialAccess),
-  },
+  name: 'auth',
+  initialState,
   reducers: {
-    loggedIn(state, action) {
-      const { accessToken, refreshToken } = action.payload;
-      state.accessToken = accessToken || "";
-      state.refreshToken = refreshToken || "";
-      state.user = buildUser(accessToken || "");
-      tokenStorage.setTokens({ accessToken, refreshToken });
+    tokensRefreshed(state, action) {
+      applyTokens(state, action.payload);
+      state.error = null;
+      state.initialized = true;
     },
-    accessTokenUpdated(state, action) {
-      const accessToken = action.payload || "";
-      state.accessToken = accessToken;
-      state.user = buildUser(accessToken);
-      tokenStorage.setAccess(accessToken);
-    },
-    loggedOut(state) {
-      state.accessToken = "";
-      state.refreshToken = "";
+    forceLogout(state) {
+      state.accessToken = null;
+      state.refreshToken = null;
       state.user = null;
-      tokenStorage.clear();
+      state.error = null;
+      state.status = 'idle';
+      state.bootStatus = 'idle';
+      state.initialized = true;
+      clearPersistedState();
     },
+    clearAuthError(state) {
+      state.error = null;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(loginUser.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(loginUser.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.initialized = true;
+        applyTokens(state, action.payload);
+      })
+      .addCase(loginUser.rejected, (state, action) => {
+        state.status = 'failed';
+        state.initialized = true;
+        state.error = action.payload || 'Login failed.';
+      })
+      .addCase(registerUser.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(registerUser.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.initialized = true;
+        applyTokens(state, action.payload);
+      })
+      .addCase(registerUser.rejected, (state, action) => {
+        state.status = 'failed';
+        state.initialized = true;
+        state.error = action.payload || 'Registration failed.';
+      })
+      .addCase(bootstrapSession.pending, (state) => {
+        state.bootStatus = 'loading';
+        state.error = null;
+      })
+      .addCase(bootstrapSession.fulfilled, (state, action) => {
+        state.bootStatus = 'succeeded';
+        state.initialized = true;
+        applyTokens(state, action.payload);
+      })
+      .addCase(bootstrapSession.rejected, (state, action) => {
+        state.bootStatus = 'failed';
+        state.initialized = true;
+        state.accessToken = null;
+        state.refreshToken = null;
+        state.user = null;
+        state.error = action.payload || null;
+        clearPersistedState();
+      })
+      .addCase(logoutUser.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(logoutUser.fulfilled, (state) => {
+        state.status = 'idle';
+        state.bootStatus = 'idle';
+        state.accessToken = null;
+        state.refreshToken = null;
+        state.user = null;
+        state.error = null;
+        state.initialized = true;
+        clearPersistedState();
+      })
+      .addCase(logoutUser.rejected, (state) => {
+        state.status = 'idle';
+        state.bootStatus = 'idle';
+        state.accessToken = null;
+        state.refreshToken = null;
+        state.user = null;
+        state.error = null;
+        state.initialized = true;
+        clearPersistedState();
+      });
   },
 });
 
-export const { loggedIn, accessTokenUpdated, loggedOut } = authSlice.actions;
+export const { tokensRefreshed, forceLogout, clearAuthError } = authSlice.actions;
 export default authSlice.reducer;
