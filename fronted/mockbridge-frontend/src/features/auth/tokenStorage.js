@@ -10,7 +10,7 @@ export const tokenStorage = {
     if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
   },
   setAccess(accessToken) {
-    localStorage.setItem("accessToken", accessToken);
+    if (accessToken) localStorage.setItem("accessToken", accessToken);
   },
   clear() {
     localStorage.removeItem("accessToken");

@@ -1,225 +1,254 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Shell from "../ui/Shell.jsx";
-
-import { addSkill, createProfile, deleteSkill, getMyProfile, updateProfile } from "../api/userApi.js";
+import Shell from "../ui/Shell";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  createSkill,
+  fetchMyProfile,
+  removeSkill,
+  saveProfile,
+} from "../features/profile/profileSlice";
 import { toastAdded } from "../features/ui/uiSlice";
-import { useDispatch } from "react-redux";
-import { showApiErrorToast } from "../api/apiClient";
+import LoadingBlock from "../ui/LoadingBlock";
 
 export default function ProfileSetup() {
   const nav = useNavigate();
   const dispatch = useDispatch();
 
-  const [loading, setLoading] = useState(true);
-  const [exists, setExists] = useState(false);
+  const profile = useSelector((s) => s.profile.data);
+  const status = useSelector((s) => s.profile.status);
+  const saveStatus = useSelector((s) => s.profile.saveStatus);
+  const skillStatus = useSelector((s) => s.profile.skillStatus);
 
   const [fullName, setFullName] = useState("");
   const [headline, setHeadline] = useState("");
   const [bio, setBio] = useState("");
   const [years, setYears] = useState(0);
-
-  const [skills, setSkills] = useState([]);
   const [newSkill, setNewSkill] = useState("");
   const [newProf, setNewProf] = useState("BEGINNER");
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const p = await getMyProfile();
-      setExists(true);
-      setFullName(p.fullName || "");
-      setHeadline(p.headline || "");
-      setBio(p.bio || "");
-      setYears(p.yearsOfExperience || 0);
-      setSkills(p.skills || []);
-    } catch {
-      setExists(false);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (!profile && status !== "loading") {
+      dispatch(fetchMyProfile());
     }
-  };
+  }, [dispatch, profile, status]);
 
   useEffect(() => {
-    load();
-  }, []);
+    if (profile) {
+      setFullName(profile.fullName || "");
+      setHeadline(profile.headline || "");
+      setBio(profile.bio || "");
+      setYears(profile.yearsOfExperience || 0);
+    }
+  }, [profile]);
 
-  const submit = async (e) => {
+  const exists = Boolean(profile);
+
+  const onSubmit = async (e) => {
     e.preventDefault();
 
     if (!fullName.trim()) {
-      dispatch(toastAdded({ type: "error", title: "Validation", message: "Full name is required." }));
+      dispatch(
+        toastAdded({
+          type: "error",
+          title: "Validation",
+          message: "Full name is required.",
+        })
+      );
       return;
     }
 
-    try {
-      const payload = {
-        fullName: fullName.trim(),
-        headline: headline.trim(),
-        bio: bio.trim(),
-        yearsOfExperience: Number(years),
-        skills: [],
-      };
+    const action = await dispatch(
+      saveProfile({
+        exists,
+        payload: {
+          fullName: fullName.trim(),
+          headline: headline.trim(),
+          bio: bio.trim(),
+          yearsOfExperience: Number(years),
+          skills: [],
+        },
+      })
+    );
 
-      const p = exists ? await updateProfile(payload) : await createProfile(payload);
-      setExists(true);
-      setSkills(p.skills || []);
-      dispatch(toastAdded({ type: "success", title: "Saved", message: "Profile updated successfully." }));
+    if (saveProfile.fulfilled.match(action)) {
+      dispatch(
+        toastAdded({
+          type: "success",
+          title: exists ? "Profile updated" : "Profile created",
+          message: "Saved successfully.",
+        })
+      );
       nav("/dashboard");
-    } catch (err) {
-      showApiErrorToast(err, "Save failed");
+    } else {
+      dispatch(
+        toastAdded({
+          type: "error",
+          title: "Save failed",
+          message: action.payload || "Could not save profile.",
+        })
+      );
     }
   };
 
-  const add = async () => {
+  const onAddSkill = async () => {
     if (!newSkill.trim()) return;
-    try {
-      const s = await addSkill({ skillName: newSkill.trim(), proficiency: newProf });
-      setSkills((prev) => [...prev, s]);
+
+    const action = await dispatch(
+      createSkill({ skillName: newSkill.trim(), proficiency: newProf })
+    );
+
+    if (createSkill.fulfilled.match(action)) {
+      dispatch(
+        toastAdded({
+          type: "success",
+          title: "Skill added",
+          message: "Your skill was added.",
+        })
+      );
       setNewSkill("");
       setNewProf("BEGINNER");
-      dispatch(toastAdded({ type: "success", title: "Added", message: "Skill added." }));
-    } catch (err) {
-      showApiErrorToast(err, "Add skill failed");
+    } else {
+      dispatch(
+        toastAdded({
+          type: "error",
+          title: "Add skill failed",
+          message: action.payload || "Could not add skill.",
+        })
+      );
     }
   };
 
-  const remove = async (id) => {
-    try {
-      await deleteSkill(id);
-      setSkills((prev) => prev.filter((x) => x.id !== id));
-      dispatch(toastAdded({ type: "info", title: "Deleted", message: "Skill removed." }));
-    } catch (err) {
-      showApiErrorToast(err, "Delete failed");
+  const onDeleteSkill = async (skillId) => {
+    const action = await dispatch(removeSkill(skillId));
+    if (removeSkill.fulfilled.match(action)) {
+      dispatch(
+        toastAdded({
+          type: "info",
+          title: "Skill deleted",
+          message: "The skill was removed.",
+        })
+      );
+    } else {
+      dispatch(
+        toastAdded({
+          type: "error",
+          title: "Delete failed",
+          message: action.payload || "Could not delete skill.",
+        })
+      );
     }
   };
 
   return (
     <Shell title={exists ? "Edit Profile" : "Create Profile"} subtitle="Keep it short and clear">
-      {loading ? (
-        <div>Loading...</div>
+      {status === "loading" ? (
+        <LoadingBlock label="Loading profile..." />
       ) : (
         <>
-          <form onSubmit={submit} style={{ display: "grid", gap: 10, maxWidth: 720 }}>
+          <form onSubmit={onSubmit} style={{ display: "grid", gap: 10, maxWidth: 720 }}>
             <input
               placeholder="Full name"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #e2e8f0" }}
+              style={inputStyle}
             />
             <input
-              placeholder="Headline (e.g., Backend Engineer)"
+              placeholder="Headline"
               value={headline}
               onChange={(e) => setHeadline(e.target.value)}
-              style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #e2e8f0" }}
+              style={inputStyle}
             />
             <textarea
               placeholder="Bio"
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #e2e8f0", minHeight: 110 }}
+              style={{ ...inputStyle, minHeight: 110 }}
             />
             <input
               placeholder="Years of experience"
               type="number"
               value={years}
               onChange={(e) => setYears(e.target.value)}
-              style={{ width: "100%", padding: 12, borderRadius: 12, border: "1px solid #e2e8f0" }}
+              style={inputStyle}
             />
 
-            <button
-              style={{
-                padding: 12,
-                borderRadius: 12,
-                border: 0,
-                background: "#0b1220",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 800,
-                maxWidth: 240,
-              }}
-            >
-              {exists ? "Update Profile" : "Create Profile"}
+            <button style={primaryButton} disabled={saveStatus === "loading"}>
+              {saveStatus === "loading"
+                ? "Saving..."
+                : exists
+                ? "Update Profile"
+                : "Create Profile"}
             </button>
           </form>
 
           <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid #eef2f7" }}>
             <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 10 }}>Skills</div>
 
-            <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-              <input
-                placeholder="Skill name (e.g., Spring Boot)"
-                value={newSkill}
-                onChange={(e) => setNewSkill(e.target.value)}
-                style={{ flex: 1, minWidth: 240, padding: 12, borderRadius: 12, border: "1px solid #e2e8f0" }}
-              />
-              <select
-                value={newProf}
-                onChange={(e) => setNewProf(e.target.value)}
-                style={{ padding: 12, borderRadius: 12, border: "1px solid #e2e8f0" }}
-              >
-                <option>BEGINNER</option>
-                <option>INTERMEDIATE</option>
-                <option>EXPERT</option>
-              </select>
-              <button
-                type="button"
-                onClick={add}
-                disabled={!newSkill.trim()}
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  border: "1px solid #e2e8f0",
-                  background: "white",
-                  cursor: newSkill.trim() ? "pointer" : "not-allowed",
-                  fontWeight: 800,
-                  opacity: newSkill.trim() ? 1 : 0.6,
-                }}
-              >
-                Add
-              </button>
-            </div>
+            {exists ? (
+              <>
+                <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+                  <input
+                    placeholder="Skill name"
+                    value={newSkill}
+                    onChange={(e) => setNewSkill(e.target.value)}
+                    style={{ ...inputStyle, flex: 1, minWidth: 240 }}
+                  />
+                  <select
+                    value={newProf}
+                    onChange={(e) => setNewProf(e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option>BEGINNER</option>
+                    <option>INTERMEDIATE</option>
+                    <option>EXPERT</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={onAddSkill}
+                    disabled={!newSkill.trim() || skillStatus === "loading"}
+                    style={secondaryButton}
+                  >
+                    {skillStatus === "loading" ? "Adding..." : "Add"}
+                  </button>
+                </div>
 
-            {skills.length === 0 ? (
-              <div style={{ color: "#64748b" }}>No skills added yet.</div>
+                {(profile?.skills || []).length === 0 ? (
+                  <div style={{ color: "#64748b" }}>No skills added yet.</div>
+                ) : (
+                  <ul style={{ paddingLeft: 18 }}>
+                    {profile.skills.map((s) => (
+                      <li
+                        key={s.id}
+                        style={{
+                          marginBottom: 8,
+                          display: "flex",
+                          gap: 10,
+                          alignItems: "center",
+                        }}
+                      >
+                        <span style={{ flex: 1 }}>
+                          {s.skillName} ({s.proficiency})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onDeleteSkill(s.id)}
+                          style={secondaryButton}
+                        >
+                          Delete
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
             ) : (
-              <ul style={{ paddingLeft: 18 }}>
-                {skills.map((s) => (
-                  <li key={s.id} style={{ marginBottom: 8, display: "flex", gap: 10, alignItems: "center" }}>
-                    <span style={{ flex: 1 }}>
-                      {s.skillName} ({s.proficiency})
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => remove(s.id)}
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: 12,
-                        border: "1px solid #e2e8f0",
-                        background: "white",
-                        cursor: "pointer",
-                        fontWeight: 800,
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <div style={{ color: "#64748b" }}>
+                Save the profile first, then add skills.
+              </div>
             )}
 
-            <button
-              onClick={() => nav("/dashboard")}
-              style={{
-                marginTop: 14,
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px solid #e2e8f0",
-                background: "white",
-                cursor: "pointer",
-                fontWeight: 800,
-              }}
-            >
+            <button onClick={() => nav("/dashboard")} style={{ ...secondaryButton, marginTop: 14 }}>
               Back
             </button>
           </div>
@@ -228,3 +257,30 @@ export default function ProfileSetup() {
     </Shell>
   );
 }
+
+const inputStyle = {
+  width: "100%",
+  padding: 12,
+  borderRadius: 12,
+  border: "1px solid #e2e8f0",
+};
+
+const primaryButton = {
+  padding: 12,
+  borderRadius: 12,
+  border: 0,
+  background: "#0b1220",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 800,
+  maxWidth: 240,
+};
+
+const secondaryButton = {
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid #e2e8f0",
+  background: "white",
+  cursor: "pointer",
+  fontWeight: 800,
+};

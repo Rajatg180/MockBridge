@@ -3,7 +3,7 @@ import { createSlice, nanoid } from "@reduxjs/toolkit";
 const uiSlice = createSlice({
   name: "ui",
   initialState: {
-    toasts: [], // {id, type, title, message}
+    toasts: [],
   },
   reducers: {
     toastAdded: {
@@ -11,7 +11,14 @@ const uiSlice = createSlice({
         state.toasts.push(action.payload);
       },
       prepare({ type = "info", title = "", message = "" }) {
-        return { payload: { id: nanoid(), type, title, message } };
+        return {
+          payload: {
+            id: nanoid(),
+            type,
+            title,
+            message,
+          },
+        };
       },
     },
     toastRemoved(state, action) {

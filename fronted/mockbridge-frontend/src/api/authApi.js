@@ -1,20 +1,30 @@
 import { authClient } from "./apiClient";
 
-export async function register(email, password) {
-  const res = await authClient.post("/auth/register", { email, password });
-  return res.data;
-}
+const loginApi = async ({ email, password }) => {
+  const response = await authClient.post("/auth/login", {
+    email,
+    password,
+  });
+  return response.data;
+};
 
-export async function login(email, password) {
-  const res = await authClient.post("/auth/login", { email, password });
-  return res.data;
-}
+const registerApi = async ({email, password}) => {
+  const response = await authClient.post("/auth/register", {
+    email,
+    password,
+  });
+  return response.data;
+};
 
-export async function refresh(refreshToken) {
-  const res = await authClient.post("/auth/refresh", { refreshToken });
-  return res.data;
-}
+const logoutApi = async () => {
+  const response = await authClient.post("/auth/logout");
+  return response.data;
+};
 
-export async function logoutApi(refreshToken) {
-  await authClient.post("/auth/logout", { refreshToken });
-}
+const authApi = {
+  loginApi,
+  registerApi,
+  logoutApi,
+};
+
+export default authApi;

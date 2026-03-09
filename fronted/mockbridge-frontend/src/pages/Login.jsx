@@ -1,9 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { useDispatch } from "react-redux";
-
-import Shell from "../ui/Shell.jsx";
-import { login as loginApi } from "../api/authApi.js";
+import Shell from "../ui/Shell";
+import authApi from "../api/authApi";
 import { loggedIn } from "../features/auth/authSlice";
 import { toastAdded } from "../features/ui/uiSlice";
 import { showApiErrorToast } from "../api/apiClient";
@@ -21,29 +20,43 @@ export default function Login() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+
     if (!email.trim() || !password.trim()) {
-      dispatch(toastAdded({ type: "error", title: "Missing fields", message: "Email and password required." }));
+      dispatch(
+        toastAdded({
+          type: "error",
+          title: "Missing fields",
+          message: "Email and password are required.",
+        })
+      );
       return;
     }
 
     setBusy(true);
     try {
-      const data = await loginApi(email.trim().toLowerCase(), password);
+      const data = await authApi.loginApi({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
       dispatch(loggedIn(data));
-      dispatch(toastAdded({ type: "success", title: "Welcome back", message: "Login successful." }));
+      dispatch(
+        toastAdded({
+          type: "success",
+          title: "Welcome back",
+          message: "Login successful.",
+        })
+      );
       nav(from, { replace: true });
-    } catch (err) {
-      showApiErrorToast(err, "Login failed");
+    } catch (error) {
+      showApiErrorToast(error, "Login failed");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Shell
-      title="MockBridge"
-      subtitle="Sign in to continue"
-    >
+    <Shell title="MockBridge" subtitle="Sign in to continue" withNav={false}>
       <form onSubmit={onSubmit} style={{ maxWidth: 420 }}>
         <label style={{ display: "block", fontWeight: 700, marginBottom: 6 }}>Email</label>
         <input

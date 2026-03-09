@@ -1,136 +1,151 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-
-import Shell from "../ui/Shell.jsx";
-import { getMyProfile } from "../api/userApi.js";
-import { logoutApi } from "../api/authApi.js";
-import { loggedOut } from "../features/auth/authSlice";
-import { toastAdded } from "../features/ui/uiSlice";
-import { showApiErrorToast } from "../api/apiClient";
+import { useNavigate } from "react-router-dom";
+import Shell from "../ui/Shell";
+import SectionCard from "../ui/SectionCard";
+import StatusBadge from "../ui/StatusBadge";
+import LoadingBlock from "../ui/LoadingBlock";
+import EmptyState from "../ui/EmptyState";
+import { fetchMyProfile } from "../features/profile/profileSlice";
 
 export default function Dashboard() {
-  const { user, refreshToken } = useSelector((s) => s.auth);
-  const dispatch = useDispatch();
   const nav = useNavigate();
+  const dispatch = useDispatch();
 
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const auth = useSelector((s) => s.auth);
+  const profile = useSelector((s) => s.profile.data);
+  const profileStatus = useSelector((s) => s.profile.status);
+  const interview = useSelector((s) => s.interview || {});
 
   useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      setLoading(true);
-      try {
-        const p = await getMyProfile();
-        if (!alive) return;
-        setProfile(p);
-      } catch (err) {
-        // Profile might not exist yet
-        showApiErrorToast(err, "Could not load profile");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const doLogout = async () => {
-    try {
-      if (refreshToken) await logoutApi(refreshToken);
-    } catch {
-      // ignore logout errors
-    } finally {
-      dispatch(loggedOut());
-      dispatch(toastAdded({ type: "info", title: "Logged out", message: "See you soon!" }));
-      nav("/login");
+    if (!profile && profileStatus !== "loading") {
+      dispatch(fetchMyProfile());
     }
-  };
+  }, [dispatch, profile, profileStatus]);
 
   return (
     <Shell
       title="Dashboard"
-      subtitle={user ? `Logged in as ${user.email} (${user.role})` : ""}
-      right={
-        <button
-          onClick={doLogout}
-          style={{
-            padding: "10px 12px",
-            borderRadius: 12,
-            border: "1px solid #e2e8f0",
-            background: "white",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          Logout
-        </button>
-      }
+      subtitle={auth.user ? `Signed in as ${auth.user.email} (${auth.user.role})` : ""}
     >
-      {loading ? (
-        <div>Loading profile...</div>
-      ) : profile ? (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
-          <div style={{ background: "#f8fafc", padding: 16, borderRadius: 16, border: "1px solid #eef2f7" }}>
-            <div style={{ fontSize: 16, fontWeight: 900, marginBottom: 8 }}>My Profile</div>
-            <div><b>Name:</b> {profile.fullName}</div>
-            <div><b>Headline:</b> {profile.headline || "-"}</div>
-            <div><b>Experience:</b> {profile.yearsOfExperience} yrs</div>
-            <div><b>Bio:</b> {profile.bio || "-"}</div>
-
-            <div style={{ marginTop: 10 }}>
-              <b>Skills:</b>
-              <ul style={{ marginTop: 6 }}>
-                {(profile.skills || []).map((s) => (
-                  <li key={s.id}>
-                    {s.skillName} ({s.proficiency})
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <button
-              onClick={() => nav("/profile/setup")}
-              style={{
-                marginTop: 10,
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: 0,
-                background: "#0b1220",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 800,
-              }}
-            >
-              Edit Profile
+      <div style={{ display: "grid", gap: 16 }}>
+        <SectionCard title="Quick actions">
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button onClick={() => nav("/profile/setup")} style={buttonPrimary}>
+              Profile
+            </button>
+            <button onClick={() => nav("/interviews/open-slots")} style={buttonSecondary}>
+              Browse Open Slots
+            </button>
+            <button onClick={() => nav("/interviews/create-slot")} style={buttonSecondary}>
+              Create Slot
+            </button>
+            <button onClick={() => nav("/interviews/actions")} style={buttonSecondary}>
+              Booking Actions
             </button>
           </div>
+        </SectionCard>
+
+        <SectionCard title="My profile" subtitle="Current snapshot from user service">
+          {profileStatus === "loading" ? (
+            <LoadingBlock label="Loading profile..." />
+          ) : profile ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              <div><b>Name:</b> {profile.fullName}</div>
+              <div><b>Headline:</b> {profile.headline || "-"}</div>
+              <div><b>Experience:</b> {profile.yearsOfExperience} years</div>
+              <div><b>Bio:</b> {profile.bio || "-"}</div>
+              <div>
+                <b>Skills:</b>{" "}
+                {(profile.skills || []).length > 0
+                  ? profile.skills.map((s) => `${s.skillName} (${s.proficiency})`).join(", ")
+                  : "No skills yet"}
+              </div>
+            </div>
+          ) : (
+            <EmptyState
+              title="Profile not found"
+              message="Create your profile to complete onboarding."
+              action={
+                <button onClick={() => nav("/profile/setup")} style={buttonPrimary}>
+                  Setup Profile
+                </button>
+              }
+            />
+          )}
+        </SectionCard>
+
+        <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}>
+          <SectionCard title="Recent created slot">
+            {interview.recentCreatedSlot ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div><b>Slot ID:</b> {interview.recentCreatedSlot.id}</div>
+                <div><b>Start:</b> {interview.recentCreatedSlot.startTimeUtc}</div>
+                <div><b>End:</b> {interview.recentCreatedSlot.endTimeUtc}</div>
+                <div><StatusBadge value={interview.recentCreatedSlot.status} /></div>
+              </div>
+            ) : (
+              <EmptyState title="No slot created yet" message="Create your first slot to start mock interviews." />
+            )}
+          </SectionCard>
+
+          <SectionCard title="Recent booking">
+            {interview.recentBooking ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div><b>Booking ID:</b> {interview.recentBooking.bookingId}</div>
+                <div><b>Slot ID:</b> {interview.recentBooking.slotId}</div>
+                <div><StatusBadge value={interview.recentBooking.status} /></div>
+                <button
+                  onClick={() => nav("/interviews/actions", { state: { bookingId: interview.recentBooking.bookingId } })}
+                  style={buttonSecondary}
+                >
+                  Use Booking ID
+                </button>
+              </div>
+            ) : (
+              <EmptyState title="No booking yet" message="Book an open slot to continue the session flow." />
+            )}
+          </SectionCard>
+
+          <SectionCard title="Recent session">
+            {interview.recentConfirmedSession ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                <div><b>Session ID:</b> {interview.recentConfirmedSession.sessionId}</div>
+                <div><b>Booking ID:</b> {interview.recentConfirmedSession.bookingId}</div>
+                <div><b>Room:</b> {interview.recentConfirmedSession.roomId}</div>
+                <div><StatusBadge value={interview.recentConfirmedSession.sessionStatus} /></div>
+                <button
+                  onClick={() => nav(`/interviews/session/${interview.recentConfirmedSession.bookingId}`)}
+                  style={buttonPrimary}
+                >
+                  Open Session
+                </button>
+              </div>
+            ) : (
+              <EmptyState title="No session yet" message="A session appears after booking confirmation." />
+            )}
+          </SectionCard>
         </div>
-      ) : (
-        <div style={{ background: "#fff7ed", padding: 16, borderRadius: 16, border: "1px solid #fed7aa" }}>
-          <div style={{ fontWeight: 900, marginBottom: 6 }}>Profile not found</div>
-          <div style={{ color: "#7c2d12" }}>Please create your profile to continue.</div>
-          <button
-            onClick={() => nav("/profile/setup")}
-            style={{
-              marginTop: 10,
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: 0,
-              background: "#0b1220",
-              color: "white",
-              cursor: "pointer",
-              fontWeight: 800,
-            }}
-          >
-            Setup Profile
-          </button>
-        </div>
-      )}
+      </div>
     </Shell>
   );
 }
+
+const buttonPrimary = {
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: 0,
+  background: "#0f172a",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 800,
+};
+
+const buttonSecondary = {
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid #e2e8f0",
+  background: "white",
+  cursor: "pointer",
+  fontWeight: 800,
+};

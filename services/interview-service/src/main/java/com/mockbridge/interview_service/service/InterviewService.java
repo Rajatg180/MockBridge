@@ -63,6 +63,10 @@ public class InterviewService {
     public BookingResponse bookSlot(UUID studentId, UUID slotId) {
         AvailabilitySlot slot = slotRepo.findByIdForUpdate(slotId)
                 .orElseThrow(() -> new IllegalArgumentException("Slot not found"));
+        
+        // if (bookingRepo.existsBySlot(slot)) {
+        //     throw new IllegalArgumentException("Slot already booked");
+        // }
 
         if (slot.getStatus() != SlotStatus.OPEN) {
             throw new IllegalArgumentException("Slot is not open");

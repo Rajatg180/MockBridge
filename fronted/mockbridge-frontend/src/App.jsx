@@ -1,19 +1,41 @@
 import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
-import Login from "./pages/Login.jsx";
-import Register from "./pages/Register.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
-import ProfileSetup from "./pages/ProfileSetup.jsx";
-import RequireAuth from "./auth/RequireAuth.jsx";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+import ProfileSetup from "./pages/ProfileSetup";
+import OpenSlots from "./pages/OpenSlots";
+import CreateSlot from "./pages/CreateSlot";
+import BookingActions from "./pages/BookingActions";
+import SessionRoom from "./pages/SessionRoom";
+import NotFound from "./pages/NotFound";
+
+import RequireAuth from "./auth/RequireAuth";
+import RedirectIfAuth from "./auth/RedirectIfAuth";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
 
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route
+        path="/login"
+        element={
+          <RedirectIfAuth>
+            <Login />
+          </RedirectIfAuth>
+        }
+      />
+
+      <Route
+        path="/register"
+        element={
+          <RedirectIfAuth>
+            <Register />
+          </RedirectIfAuth>
+        }
+      />
 
       <Route
         path="/dashboard"
@@ -33,7 +55,43 @@ export default function App() {
         }
       />
 
-      <Route path="*" element={<div style={{ padding: 30 }}>404</div>} />
+      <Route
+        path="/interviews/open-slots"
+        element={
+          <RequireAuth>
+            <OpenSlots />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/interviews/create-slot"
+        element={
+          <RequireAuth>
+            <CreateSlot />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/interviews/actions"
+        element={
+          <RequireAuth>
+            <BookingActions />
+          </RequireAuth>
+        }
+      />
+
+      <Route
+        path="/interviews/session/:bookingId"
+        element={
+          <RequireAuth>
+            <SessionRoom />
+          </RequireAuth>
+        }
+      />
+
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

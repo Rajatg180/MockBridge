@@ -4,7 +4,8 @@ import { tokenStorage } from "./tokenStorage";
 function decodeJwtPayload(token) {
   try {
     const payload = token.split(".")[1];
-    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(normalized);
     return JSON.parse(json);
   } catch {
     return null;
