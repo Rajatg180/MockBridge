@@ -8,6 +8,7 @@ const navItems = [
   { to: '/interviewers/search', label: 'Search Interviewers' },
   { to: '/slots/open', label: 'Open Slots' },
   { to: '/slots/create', label: 'Create Slot' },
+  { to: '/booking-requests', label: 'Booking Requests' },
   { to: '/workspace', label: 'Workspace' },
 ];
 

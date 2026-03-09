@@ -22,9 +22,9 @@ public class InterviewService {
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public InterviewService(AvailabilitySlotRepository slotRepo,
-                            BookingRepository bookingRepo,
-                            SessionRepository sessionRepo,
-                            KafkaTemplate<String, String> kafkaTemplate) {
+            BookingRepository bookingRepo,
+            SessionRepository sessionRepo,
+            KafkaTemplate<String, String> kafkaTemplate) {
         this.slotRepo = slotRepo;
         this.bookingRepo = bookingRepo;
         this.sessionRepo = sessionRepo;
@@ -48,13 +48,15 @@ public class InterviewService {
 
         slotRepo.save(slot);
 
-        return new SlotResponse(slot.getId(), slot.getInterviewerId(), slot.getStartTimeUtc(), slot.getEndTimeUtc(), slot.getStatus().name());
+        return new SlotResponse(slot.getId(), slot.getInterviewerId(), slot.getStartTimeUtc(), slot.getEndTimeUtc(),
+                slot.getStatus().name());
     }
 
     @Transactional(readOnly = true)
     public List<SlotResponse> listOpenSlots() {
         return slotRepo.findByStatus(SlotStatus.OPEN).stream()
-                .map(s -> new SlotResponse(s.getId(), s.getInterviewerId(), s.getStartTimeUtc(), s.getEndTimeUtc(), s.getStatus().name()))
+                .map(s -> new SlotResponse(s.getId(), s.getInterviewerId(), s.getStartTimeUtc(), s.getEndTimeUtc(),
+                        s.getStatus().name()))
                 .toList();
     }
 
@@ -63,9 +65,9 @@ public class InterviewService {
     public BookingResponse bookSlot(UUID studentId, UUID slotId) {
         AvailabilitySlot slot = slotRepo.findByIdForUpdate(slotId)
                 .orElseThrow(() -> new IllegalArgumentException("Slot not found"));
-        
+
         // if (bookingRepo.existsBySlot(slot)) {
-        //     throw new IllegalArgumentException("Slot already booked");
+        // throw new IllegalArgumentException("Slot already booked");
         // }
 
         if (slot.getStatus() != SlotStatus.OPEN) {
@@ -128,7 +130,8 @@ public class InterviewService {
 
         kafkaTemplate.send("interview-confirmed", booking.getId().toString());
 
-        return new SessionResponse(session.getId(), booking.getId(), session.getRoomId(), session.getSessionStatus().name());
+        return new SessionResponse(session.getId(), booking.getId(), session.getRoomId(),
+                session.getSessionStatus().name());
     }
 
     @Transactional(readOnly = true)
@@ -147,5 +150,42 @@ public class InterviewService {
                 .orElseThrow(() -> new IllegalArgumentException("Session not created yet"));
 
         return new SessionResponse(session.getId(), bookingId, session.getRoomId(), session.getSessionStatus().name());
+    }
+
+    @Transactional(readOnly = true)
+    public List<IncomingBookingRequestResponse> listIncomingBookingRequests(UUID interviewerId, String status) {
+        List<Booking> bookings;
+
+        if (status == null || status.isBlank()) {
+            bookings = bookingRepo.findBySlot_InterviewerIdOrderByCreatedAtDesc(interviewerId);
+        } else {
+            BookingStatus bookingStatus;
+            try {
+                bookingStatus = BookingStatus.valueOf(status.trim().toUpperCase());
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("Invalid status. Use PENDING/CONFIRMED/CANCELLED/COMPLETED");
+            }
+
+            bookings = bookingRepo.findBySlot_InterviewerIdAndStatusOrderByCreatedAtDesc(interviewerId, bookingStatus);
+        }
+
+        return bookings.stream()
+                .map(this::toIncomingBookingRequestResponse)
+                .toList();
+    }
+
+    private IncomingBookingRequestResponse toIncomingBookingRequestResponse(Booking booking) {
+        AvailabilitySlot slot = booking.getSlot();
+
+        return new IncomingBookingRequestResponse(
+                booking.getId(),
+                slot.getId(),
+                slot.getInterviewerId(),
+                booking.getStudentId(),
+                booking.getStatus().name(),
+                slot.getStatus().name(),
+                slot.getStartTimeUtc(),
+                slot.getEndTimeUtc(),
+                booking.getCreatedAt());
     }
 }

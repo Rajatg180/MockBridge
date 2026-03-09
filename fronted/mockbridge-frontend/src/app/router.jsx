@@ -16,6 +16,7 @@ import { SearchInterviewersPage } from '../pages/profile/SearchInterviewersPage'
 import { OpenSlotsPage } from '../pages/slots/OpenSlotsPage';
 import { CreateSlotPage } from '../pages/slots/CreateSlotPage';
 import { WorkspacePage } from '../pages/interviews/WorkspacePage';
+import { BookingRequestsPage } from '../pages/interviews/BookingRequestsPage';
 import { NotFoundPage } from '../pages/dashboard/NotFoundPage';
 
 export const router = createBrowserRouter([
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
                   { path: 'interviewers/search', element: <SearchInterviewersPage /> },
                   { path: 'slots/open', element: <OpenSlotsPage /> },
                   { path: 'slots/create', element: <CreateSlotPage /> },
+                  { path: 'booking-requests', element: <BookingRequestsPage /> },
                   { path: 'workspace', element: <WorkspacePage /> },
                 ],
               },

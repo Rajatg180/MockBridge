@@ -24,6 +24,7 @@ export function DashboardPage() {
         actions={
           <div className="inline-actions">
             <Link className="button button-secondary" to="/slots/open">Browse slots</Link>
+            <Link className="button button-secondary" to="/booking-requests">Booking requests</Link>
             <Link className="button button-primary" to="/slots/create">Create slot</Link>
           </div>
         }
@@ -67,6 +68,7 @@ export function DashboardPage() {
             <Link to="/interviewers/search">Search interviewers by skill</Link>
             <Link to="/slots/open">Book an open slot</Link>
             <Link to="/slots/create">Publish a new availability slot</Link>
+            <Link to="/booking-requests">Review booking requests for my slots</Link>
             <Link to="/workspace">Confirm booking or fetch session by booking ID</Link>
           </div>
         </article>
