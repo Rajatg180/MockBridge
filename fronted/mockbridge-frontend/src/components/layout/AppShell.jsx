@@ -9,6 +9,7 @@ const navItems = [
   { to: '/slots/open', label: 'Open Slots' },
   { to: '/slots/create', label: 'Create Slot' },
   { to: '/booking-requests', label: 'Booking Requests' },
+  { to: '/my-bookings', label: 'My Bookings' },
   { to: '/workspace', label: 'Workspace' },
 ];
 

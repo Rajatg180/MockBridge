@@ -1,8 +1,8 @@
-import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import { api } from '../../lib/http';
-import { clearPersistedState, getPersistedState } from '../../lib/storage';
-import { extractUserFromAccessToken } from '../../lib/jwt';
-import { getApiErrorMessage } from '../../lib/error';
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import { api } from "../../lib/http";
+import { clearPersistedState, getPersistedState } from "../../lib/storage";
+import { extractUserFromAccessToken } from "../../lib/jwt";
+import { getApiErrorMessage } from "../../lib/error";
 
 const persisted = getPersistedState();
 const persistedAuth = persisted.auth || {};
@@ -10,39 +10,41 @@ const persistedAuth = persisted.auth || {};
 const initialState = {
   accessToken: persistedAuth.accessToken || null,
   refreshToken: persistedAuth.refreshToken || null,
-  user: persistedAuth.accessToken ? extractUserFromAccessToken(persistedAuth.accessToken) : null,
-  status: 'idle',
-  bootStatus: 'idle',
+  user: persistedAuth.accessToken
+    ? extractUserFromAccessToken(persistedAuth.accessToken)
+    : null,
+  status: "idle",
+  bootStatus: "idle",
   error: null,
   initialized: false,
 };
 
 export const loginUser = createAsyncThunk(
-  'auth/loginUser',
+  "auth/loginUser",
   async (payload, { rejectWithValue }) => {
     try {
-      const response = await api.post('/auth/login', payload);
+      const response = await api.post("/auth/login", payload);
       return response.data;
     } catch (error) {
-      return rejectWithValue(getApiErrorMessage(error, 'Login failed.'));
+      return rejectWithValue(getApiErrorMessage(error, "Login failed."));
     }
   },
 );
 
 export const registerUser = createAsyncThunk(
-  'auth/registerUser',
+  "auth/registerUser",
   async (payload, { rejectWithValue }) => {
     try {
-      const response = await api.post('/auth/register', payload);
+      const response = await api.post("/auth/register", payload);
       return response.data;
     } catch (error) {
-      return rejectWithValue(getApiErrorMessage(error, 'Registration failed.'));
+      return rejectWithValue(getApiErrorMessage(error, "Registration failed."));
     }
   },
 );
 
 export const bootstrapSession = createAsyncThunk(
-  'auth/bootstrapSession',
+  "auth/bootstrapSession",
   async (_, { getState, rejectWithValue }) => {
     const state = getState();
     const refreshToken = state.auth.refreshToken || persistedAuth.refreshToken;
@@ -52,25 +54,27 @@ export const bootstrapSession = createAsyncThunk(
     }
 
     try {
-      const response = await api.post('/auth/refresh', { refreshToken });
+      const response = await api.post("/auth/refresh", { refreshToken });
       return {
         accessToken: response.data.accessToken,
         refreshToken: response.data.refreshToken || refreshToken,
       };
     } catch (error) {
-      return rejectWithValue(getApiErrorMessage(error, 'Session restore failed.'));
+      return rejectWithValue(
+        getApiErrorMessage(error, "Session restore failed."),
+      );
     }
   },
 );
 
 export const logoutUser = createAsyncThunk(
-  'auth/logoutUser',
+  "auth/logoutUser",
   async (_, { getState }) => {
     const refreshToken = getState().auth.refreshToken;
 
     try {
       if (refreshToken) {
-        await api.post('/auth/logout', { refreshToken });
+        await api.post("/auth/logout", { refreshToken });
       }
     } finally {
       return true;
@@ -81,11 +85,13 @@ export const logoutUser = createAsyncThunk(
 function applyTokens(state, payload) {
   state.accessToken = payload?.accessToken || null;
   state.refreshToken = payload?.refreshToken || null;
-  state.user = payload?.accessToken ? extractUserFromAccessToken(payload.accessToken) : null;
+  state.user = payload?.accessToken
+    ? extractUserFromAccessToken(payload.accessToken)
+    : null;
 }
 
 const authSlice = createSlice({
-  name: 'auth',
+  name: "auth",
   initialState,
   reducers: {
     tokensRefreshed(state, action) {
@@ -93,16 +99,37 @@ const authSlice = createSlice({
       state.error = null;
       state.initialized = true;
     },
+
+    /* REQUIRED FOR API CLIENT */
+    accessTokenUpdated(state, action) {
+      const newToken = action.payload;
+      state.accessToken = newToken;
+      state.user = newToken ? extractUserFromAccessToken(newToken) : null;
+    },
+
+    /* REQUIRED FOR API CLIENT */
+    loggedOut(state) {
+      state.accessToken = null;
+      state.refreshToken = null;
+      state.user = null;
+      state.error = null;
+      state.status = "idle";
+      state.bootStatus = "idle";
+      state.initialized = true;
+      clearPersistedState();
+    },
+
     forceLogout(state) {
       state.accessToken = null;
       state.refreshToken = null;
       state.user = null;
       state.error = null;
-      state.status = 'idle';
-      state.bootStatus = 'idle';
+      state.status = "idle";
+      state.bootStatus = "idle";
       state.initialized = true;
       clearPersistedState();
     },
+
     clearAuthError(state) {
       state.error = null;
     },
@@ -110,44 +137,44 @@ const authSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(loginUser.pending, (state) => {
-        state.status = 'loading';
+        state.status = "loading";
         state.error = null;
       })
       .addCase(loginUser.fulfilled, (state, action) => {
-        state.status = 'succeeded';
+        state.status = "succeeded";
         state.initialized = true;
         applyTokens(state, action.payload);
       })
       .addCase(loginUser.rejected, (state, action) => {
-        state.status = 'failed';
+        state.status = "failed";
         state.initialized = true;
-        state.error = action.payload || 'Login failed.';
+        state.error = action.payload || "Login failed.";
       })
       .addCase(registerUser.pending, (state) => {
-        state.status = 'loading';
+        state.status = "loading";
         state.error = null;
       })
       .addCase(registerUser.fulfilled, (state, action) => {
-        state.status = 'succeeded';
+        state.status = "succeeded";
         state.initialized = true;
         applyTokens(state, action.payload);
       })
       .addCase(registerUser.rejected, (state, action) => {
-        state.status = 'failed';
+        state.status = "failed";
         state.initialized = true;
-        state.error = action.payload || 'Registration failed.';
+        state.error = action.payload || "Registration failed.";
       })
       .addCase(bootstrapSession.pending, (state) => {
-        state.bootStatus = 'loading';
+        state.bootStatus = "loading";
         state.error = null;
       })
       .addCase(bootstrapSession.fulfilled, (state, action) => {
-        state.bootStatus = 'succeeded';
+        state.bootStatus = "succeeded";
         state.initialized = true;
         applyTokens(state, action.payload);
       })
       .addCase(bootstrapSession.rejected, (state, action) => {
-        state.bootStatus = 'failed';
+        state.bootStatus = "failed";
         state.initialized = true;
         state.accessToken = null;
         state.refreshToken = null;
@@ -156,11 +183,11 @@ const authSlice = createSlice({
         clearPersistedState();
       })
       .addCase(logoutUser.pending, (state) => {
-        state.status = 'loading';
+        state.status = "loading";
       })
       .addCase(logoutUser.fulfilled, (state) => {
-        state.status = 'idle';
-        state.bootStatus = 'idle';
+        state.status = "idle";
+        state.bootStatus = "idle";
         state.accessToken = null;
         state.refreshToken = null;
         state.user = null;
@@ -169,8 +196,8 @@ const authSlice = createSlice({
         clearPersistedState();
       })
       .addCase(logoutUser.rejected, (state) => {
-        state.status = 'idle';
-        state.bootStatus = 'idle';
+        state.status = "idle";
+        state.bootStatus = "idle";
         state.accessToken = null;
         state.refreshToken = null;
         state.user = null;
@@ -181,5 +208,11 @@ const authSlice = createSlice({
   },
 });
 
-export const { tokensRefreshed, forceLogout, clearAuthError } = authSlice.actions;
+export const {
+  tokensRefreshed,
+  accessTokenUpdated,
+  loggedOut,
+  forceLogout,
+  clearAuthError,
+} = authSlice.actions;
 export default authSlice.reducer;

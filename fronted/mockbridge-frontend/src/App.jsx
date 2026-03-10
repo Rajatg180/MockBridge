@@ -8,7 +8,7 @@ import ProfileSetup from "./pages/ProfileSetup";
 import OpenSlots from "./pages/OpenSlots";
 import CreateSlot from "./pages/CreateSlot";
 import BookingActions from "./pages/BookingActions";
-import SessionRoom from "./pages/SessionRoom";
+// import SessionRoom from "./pages/SessionRoom";
 import NotFound from "./pages/NotFound";
 
 import RequireAuth from "./auth/RequireAuth";
@@ -82,14 +82,14 @@ export default function App() {
         }
       />
 
-      <Route
+      {/* <Route
         path="/interviews/session/:bookingId"
         element={
           <RequireAuth>
             <SessionRoom />
           </RequireAuth>
         }
-      />
+      /> */}
 
       <Route path="*" element={<NotFound />} />
     </Routes>

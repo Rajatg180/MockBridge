@@ -25,4 +25,7 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             UUID interviewerId,
             BookingStatus status
     );
+
+    // this will return all the bookings for a student
+    List<Booking> findByStudentIdOrderByCreatedAtDesc(UUID studentId);
 }

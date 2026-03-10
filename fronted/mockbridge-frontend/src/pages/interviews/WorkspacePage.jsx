@@ -1,29 +1,49 @@
-import { useState } from 'react';
-import { useAppDispatch, useAppSelector } from '../../app/hooks';
-import { clearWorkspace, confirmBooking, fetchSession } from '../../features/interviews/interviewSlice';
-import { PageHeader } from '../../components/ui/PageHeader';
-import { StatusBanner } from '../../components/ui/StatusBanner';
-import { EmptyState } from '../../components/ui/EmptyState';
-import { TextField } from '../../components/ui/FormFields';
-import { useToast } from '../../components/ui/ToastProvider';
+import { useState } from "react";
+import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import {
+  clearWorkspace,
+  confirmBooking,
+  fetchSession,
+} from "../../features/interviews/interviewSlice";
+import { PageHeader } from "../../components/ui/PageHeader";
+import { StatusBanner } from "../../components/ui/StatusBanner";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { TextField } from "../../components/ui/FormFields";
+import { useToast } from "../../components/ui/ToastProvider";
 
 export function WorkspacePage() {
   const dispatch = useAppDispatch();
   const { pushToast } = useToast();
-  const { workspace, mutationStatus, sessionStatus, error } = useAppSelector((state) => state.interviews);
+  const { workspace, mutationStatus, sessionStatus, error } = useAppSelector(
+    (state) => state.interviews,
+  );
 
-  const [confirmBookingId, setConfirmBookingId] = useState(workspace.bookings[0]?.bookingId || '');
-  const [sessionBookingId, setSessionBookingId] = useState(workspace.bookings[0]?.bookingId || '');
+  const [confirmBookingId, setConfirmBookingId] = useState(
+    workspace.bookings[0]?.bookingId || "",
+  );
+  const [sessionBookingId, setSessionBookingId] = useState(
+    workspace.bookings[0]?.bookingId || "",
+  );
 
   async function handleConfirmBooking(event) {
     event.preventDefault();
     if (!confirmBookingId.trim()) return;
 
     try {
-      const session = await dispatch(confirmBooking(confirmBookingId.trim())).unwrap();
-      pushToast({ title: 'Booking confirmed', description: `Room ID: ${session.roomId}`, variant: 'success' });
+      const session = await dispatch(
+        confirmBooking(confirmBookingId.trim()),
+      ).unwrap();
+      pushToast({
+        title: "Booking confirmed",
+        description: `Room ID: ${session.roomId}`,
+        variant: "success",
+      });
     } catch (message) {
-      pushToast({ title: 'Confirm failed', description: String(message), variant: 'error' });
+      pushToast({
+        title: "Confirm failed",
+        description: String(message),
+        variant: "error",
+      });
     }
   }
 
@@ -32,10 +52,20 @@ export function WorkspacePage() {
     if (!sessionBookingId.trim()) return;
 
     try {
-      const session = await dispatch(fetchSession(sessionBookingId.trim())).unwrap();
-      pushToast({ title: 'Session fetched', description: `Room ID: ${session.roomId}`, variant: 'success' });
+      const session = await dispatch(
+        fetchSession(sessionBookingId.trim()),
+      ).unwrap();
+      pushToast({
+        title: "Session fetched",
+        description: `Room ID: ${session.roomId}`,
+        variant: "success",
+      });
     } catch (message) {
-      pushToast({ title: 'Fetch session failed', description: String(message), variant: 'error' });
+      pushToast({
+        title: "Fetch session failed",
+        description: String(message),
+        variant: "error",
+      });
     }
   }
 
@@ -45,7 +75,11 @@ export function WorkspacePage() {
         title="Workspace tools"
         description="This page compensates for missing list endpoints by persisting recent slot, booking, and session activity locally."
         actions={
-          <button type="button" className="button button-secondary" onClick={() => dispatch(clearWorkspace())}>
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => dispatch(clearWorkspace())}
+          >
             Clear local workspace
           </button>
         }
@@ -57,7 +91,10 @@ export function WorkspacePage() {
         <article className="card stack">
           <div>
             <h3>Confirm booking</h3>
-            <p className="muted">For interviewer flow: `POST /interviews/bookings/{'{bookingId}'}/confirm`.</p>
+            <p className="muted">
+              For interviewer flow: `POST /interviews/bookings/{"{bookingId}"}
+              /confirm`.
+            </p>
           </div>
           <form className="stack" onSubmit={handleConfirmBooking}>
             <TextField
@@ -66,8 +103,14 @@ export function WorkspacePage() {
               onChange={(event) => setConfirmBookingId(event.target.value)}
               placeholder="Paste booking UUID"
             />
-            <button type="submit" className="button button-primary" disabled={mutationStatus === 'loading'}>
-              {mutationStatus === 'loading' ? 'Confirming...' : 'Confirm booking'}
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={mutationStatus === "loading"}
+            >
+              {mutationStatus === "loading"
+                ? "Confirming..."
+                : "Confirm booking"}
             </button>
           </form>
         </article>
@@ -75,7 +118,10 @@ export function WorkspacePage() {
         <article className="card stack">
           <div>
             <h3>Get session</h3>
-            <p className="muted">For participant flow: `GET /interviews/bookings/{'{bookingId}'}/session`.</p>
+            <p className="muted">
+              For participant flow: `GET /interviews/bookings/{"{bookingId}"}
+              /session`.
+            </p>
           </div>
           <form className="stack" onSubmit={handleFetchSession}>
             <TextField
@@ -84,8 +130,12 @@ export function WorkspacePage() {
               onChange={(event) => setSessionBookingId(event.target.value)}
               placeholder="Paste booking UUID"
             />
-            <button type="submit" className="button button-primary" disabled={sessionStatus === 'loading'}>
-              {sessionStatus === 'loading' ? 'Fetching...' : 'Get session'}
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={sessionStatus === "loading"}
+            >
+              {sessionStatus === "loading" ? "Fetching..." : "Get session"}
             </button>
           </form>
         </article>
@@ -102,20 +152,27 @@ export function WorkspacePage() {
               <div key={slot.id} className="list-item">
                 <div>
                   <strong className="break-all">{slot.id}</strong>
-                  <p className="muted">{slot.startTimeUtc} to {slot.endTimeUtc} UTC</p>
+                  <p className="muted">
+                    {slot.startTimeUtc} to {slot.endTimeUtc} UTC
+                  </p>
                 </div>
                 <span className="chip">{slot.status}</span>
               </div>
             ))
           ) : (
-            <EmptyState title="No slot history" description="Create a slot to see it here." />
+            <EmptyState
+              title="No slot history"
+              description="Create a slot to see it here."
+            />
           )}
         </article>
 
         <article className="card stack">
           <div>
             <h3>Recent bookings</h3>
-            <p className="muted">Booking IDs returned from successful book actions.</p>
+            <p className="muted">
+              Booking IDs returned from successful book actions.
+            </p>
           </div>
           {workspace.bookings.length ? (
             workspace.bookings.map((booking) => (
@@ -128,7 +185,10 @@ export function WorkspacePage() {
               </div>
             ))
           ) : (
-            <EmptyState title="No booking history" description="Book a slot to get the booking ID here." />
+            <EmptyState
+              title="No booking history"
+              description="Book a slot to get the booking ID here."
+            />
           )}
         </article>
       </section>
@@ -136,7 +196,9 @@ export function WorkspacePage() {
       <section className="card stack">
         <div>
           <h3>Recent sessions</h3>
-          <p className="muted">Sessions returned by confirm and get session actions.</p>
+          <p className="muted">
+            Sessions returned by confirm and get session actions.
+          </p>
         </div>
         {workspace.sessions.length ? (
           workspace.sessions.map((session) => (
@@ -145,11 +207,24 @@ export function WorkspacePage() {
                 <strong>{session.roomId}</strong>
                 <p className="muted">Booking: {session.bookingId}</p>
               </div>
-              <span className="chip">{session.sessionStatus}</span>
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <span className="chip">{session.sessionStatus}</span>
+
+                <a
+                  href={`/session/${session.bookingId}`}
+                  className="button button-primary"
+                >
+                  Join
+                </a>
+              </div>
             </div>
           ))
         ) : (
-          <EmptyState title="No session history" description="Confirm a booking or fetch a session to populate this area." />
+          <EmptyState
+            title="No session history"
+            description="Confirm a booking or fetch a session to populate this area."
+          />
         )}
       </section>
     </div>

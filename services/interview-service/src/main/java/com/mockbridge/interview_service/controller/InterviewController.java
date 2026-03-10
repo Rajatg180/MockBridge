@@ -87,6 +87,13 @@ public class InterviewController {
             @RequestParam(defaultValue = "PENDING") String status) {
         GatewayAuth auth = requireAuth(request);
         return service.listIncomingBookingRequests(auth.getUserId(), status);
+    }   
+
+    // return all bookings for the authenticated user (both as interviewer and student)
+    @GetMapping("/me/bookings")
+    public List<MyBookingResponse> myBookings(HttpServletRequest request) {
+        GatewayAuth auth = requireAuth(request);
+        return service.myBooking(auth.getUserId());
     }
 
     private GatewayAuth requireAuth(HttpServletRequest request) {
@@ -95,6 +102,5 @@ public class InterviewController {
             throw new IllegalArgumentException("Missing gateway auth headers");
         return auth;
     }
-
    
 }

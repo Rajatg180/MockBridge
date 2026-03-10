@@ -3,7 +3,7 @@ package com.mockbridge.interview_service.service;
 import com.mockbridge.interview_service.dto.*;
 import com.mockbridge.interview_service.entity.*;
 import com.mockbridge.interview_service.repository.*;
-
+import com.mockbridge.interview_service.repository.BookingRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -187,5 +187,26 @@ public class InterviewService {
                 slot.getStartTimeUtc(),
                 slot.getEndTimeUtc(),
                 booking.getCreatedAt());
+    }
+
+    @Transactional(readOnly = true)
+    public List<MyBookingResponse> myBooking(UUID studedId){
+        List<Booking> bookings = bookingRepo.findByStudentIdOrderByCreatedAtDesc(studedId);
+        // System.out.println("Bookings found: " + bookings.size());
+        return bookings.stream()
+                .map(this::toMyBookingResponse)
+                .toList();
+    }
+
+    private MyBookingResponse toMyBookingResponse(Booking booking) {
+        AvailabilitySlot slot = booking.getSlot();
+
+        return new MyBookingResponse(
+                booking.getId(),
+                slot.getId(),
+                slot.getInterviewerId(),
+                booking.getStatus().name(),
+                slot.getStartTimeUtc(),
+                slot.getEndTimeUtc());
     }
 }

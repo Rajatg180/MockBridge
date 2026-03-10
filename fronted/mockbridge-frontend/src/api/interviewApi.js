@@ -24,3 +24,8 @@ export async function getSessionByBookingId(bookingId) {
   const res = await api.get(`/interviews/bookings/${bookingId}/session`);
   return res.data;
 }
+
+export async function getMyBookings() {
+  const res = await api.get("/interviews/me/bookings");
+  return res.data;
+}

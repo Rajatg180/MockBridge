@@ -9,11 +9,18 @@ const persisted = getPersistedState();
 const initialState = {
   openSlots: [],
   openSlotsStatus: 'idle',
+
   bookingRequests: [],
   bookingRequestsStatus: 'idle',
+
+  myBookings: [],
+  myBookingsStatus: 'idle',
+
   mutationStatus: 'idle',
   sessionStatus: 'idle',
+
   error: null,
+
   workspace: persisted.workspace || {
     createdSlots: [],
     bookings: [],
@@ -43,6 +50,19 @@ export const fetchIncomingBookingRequests = createAsyncThunk(
       return response.data;
     } catch (error) {
       return rejectWithValue(getApiErrorMessage(error, 'Failed to fetch booking requests.'));
+    }
+  },
+);
+
+/* NEW — My Bookings API */
+export const fetchMyBookings = createAsyncThunk(
+  'interviews/fetchMyBookings',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get('/interviews/me/bookings');
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(getApiErrorMessage(error, 'Failed to fetch my bookings.'));
     }
   },
 );
@@ -117,6 +137,7 @@ const interviewSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      /* OPEN SLOTS */
       .addCase(fetchOpenSlots.pending, (state) => {
         state.openSlotsStatus = 'loading';
         state.error = null;
@@ -129,6 +150,8 @@ const interviewSlice = createSlice({
         state.openSlotsStatus = 'failed';
         state.error = action.payload || 'Failed to fetch slots.';
       })
+
+      /* BOOKING REQUESTS */
       .addCase(fetchIncomingBookingRequests.pending, (state) => {
         state.bookingRequestsStatus = 'loading';
         state.error = null;
@@ -141,6 +164,22 @@ const interviewSlice = createSlice({
         state.bookingRequestsStatus = 'failed';
         state.error = action.payload || 'Failed to fetch booking requests.';
       })
+
+      /* MY BOOKINGS */
+      .addCase(fetchMyBookings.pending, (state) => {
+        state.myBookingsStatus = 'loading';
+        state.error = null;
+      })
+      .addCase(fetchMyBookings.fulfilled, (state, action) => {
+        state.myBookingsStatus = 'succeeded';
+        state.myBookings = action.payload;
+      })
+      .addCase(fetchMyBookings.rejected, (state, action) => {
+        state.myBookingsStatus = 'failed';
+        state.error = action.payload || 'Failed to fetch my bookings.';
+      })
+
+      /* CREATE SLOT */
       .addCase(createSlot.pending, (state) => {
         state.mutationStatus = 'loading';
         state.error = null;
@@ -154,6 +193,8 @@ const interviewSlice = createSlice({
         state.mutationStatus = 'failed';
         state.error = action.payload || 'Failed to create slot.';
       })
+
+      /* BOOK SLOT */
       .addCase(bookSlot.pending, (state) => {
         state.mutationStatus = 'loading';
         state.error = null;
@@ -167,19 +208,25 @@ const interviewSlice = createSlice({
         state.mutationStatus = 'failed';
         state.error = action.payload || 'Failed to book slot.';
       })
+
+      /* CONFIRM BOOKING */
       .addCase(confirmBooking.pending, (state) => {
         state.mutationStatus = 'loading';
         state.error = null;
       })
       .addCase(confirmBooking.fulfilled, (state, action) => {
         state.mutationStatus = 'succeeded';
-        state.bookingRequests = state.bookingRequests.filter((request) => request.bookingId !== action.payload.bookingId);
+        state.bookingRequests = state.bookingRequests.filter(
+          (request) => request.bookingId !== action.payload.bookingId
+        );
         state.workspace.sessions = prependUnique(state.workspace.sessions, action.payload, 'sessionId');
       })
       .addCase(confirmBooking.rejected, (state, action) => {
         state.mutationStatus = 'failed';
         state.error = action.payload || 'Failed to confirm booking.';
       })
+
+      /* SESSION */
       .addCase(fetchSession.pending, (state) => {
         state.sessionStatus = 'loading';
         state.error = null;
@@ -192,38 +239,47 @@ const interviewSlice = createSlice({
         state.sessionStatus = 'failed';
         state.error = action.payload || 'Failed to fetch session.';
       })
+
+      /* LOGOUT HANDLING */
       .addCase(forceLogout, (state) => {
         state.openSlots = [];
-        state.openSlotsStatus = 'idle';
         state.bookingRequests = [];
+        state.myBookings = [];
+        state.workspace = { createdSlots: [], bookings: [], sessions: [] };
+        state.openSlotsStatus = 'idle';
         state.bookingRequestsStatus = 'idle';
+        state.myBookingsStatus = 'idle';
         state.mutationStatus = 'idle';
         state.sessionStatus = 'idle';
         state.error = null;
-        state.workspace = { createdSlots: [], bookings: [], sessions: [] };
       })
       .addCase(logoutUser.fulfilled, (state) => {
         state.openSlots = [];
-        state.openSlotsStatus = 'idle';
         state.bookingRequests = [];
+        state.myBookings = [];
+        state.workspace = { createdSlots: [], bookings: [], sessions: [] };
+        state.openSlotsStatus = 'idle';
         state.bookingRequestsStatus = 'idle';
+        state.myBookingsStatus = 'idle';
         state.mutationStatus = 'idle';
         state.sessionStatus = 'idle';
         state.error = null;
-        state.workspace = { createdSlots: [], bookings: [], sessions: [] };
       })
       .addCase(logoutUser.rejected, (state) => {
         state.openSlots = [];
-        state.openSlotsStatus = 'idle';
         state.bookingRequests = [];
+        state.myBookings = [];
+        state.workspace = { createdSlots: [], bookings: [], sessions: [] };
+        state.openSlotsStatus = 'idle';
         state.bookingRequestsStatus = 'idle';
+        state.myBookingsStatus = 'idle';
         state.mutationStatus = 'idle';
         state.sessionStatus = 'idle';
         state.error = null;
-        state.workspace = { createdSlots: [], bookings: [], sessions: [] };
       });
   },
 });
 
 export const { clearInterviewError, clearWorkspace } = interviewSlice.actions;
+
 export default interviewSlice.reducer;
