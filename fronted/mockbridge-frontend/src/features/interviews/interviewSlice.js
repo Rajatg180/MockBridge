@@ -73,6 +73,20 @@ export const cancelSlot = createAsyncThunk(
   },
 );
 
+export const deleteSlot = createAsyncThunk(
+  "interviews/deleteSlot",
+  async (slotId, { rejectWithValue }) => {
+    try {
+      await api.delete(`/interviews/slots/${slotId}/hard-delete`);
+      return slotId;
+    } catch (error) {
+      return rejectWithValue(
+        getApiErrorMessage(error, "Failed to delete slot."),
+      );
+    }
+  },
+);
+
 export const fetchIncomingBookingRequests = createAsyncThunk(
   "interviews/fetchIncomingBookingRequests",
   async (status = "PENDING", { rejectWithValue }) => {
@@ -315,6 +329,7 @@ const interviewSlice = createSlice({
         state.sessionStatus = "failed";
         state.error = action.payload || "Failed to fetch session.";
       })
+
       .addCase(cancelSlot.pending, (state) => {
         state.mutationStatus = "loading";
         state.error = null;
@@ -341,6 +356,25 @@ const interviewSlice = createSlice({
         state.mutationStatus = "failed";
         state.error = action.payload || "Failed to cancel slot.";
       })
+
+      .addCase(deleteSlot.pending, (state) => {
+        state.mutationStatus = "loading";
+        state.error = null;
+      })
+      .addCase(deleteSlot.fulfilled, (state, action) => {
+        state.mutationStatus = "succeeded";
+
+        state.mySlots = state.mySlots.filter((slot) => slot.id !== action.payload);
+        state.openSlots = state.openSlots.filter((slot) => slot.id !== action.payload);
+        state.workspace.createdSlots = state.workspace.createdSlots.filter(
+          (slot) => slot.id !== action.payload,
+        );
+      })
+      .addCase(deleteSlot.rejected, (state, action) => {
+        state.mutationStatus = "failed";
+        state.error = action.payload || "Failed to delete slot.";
+      })
+
       .addCase(forceLogout, (state) => {
         state.openSlots = [];
         state.mySlots = [];

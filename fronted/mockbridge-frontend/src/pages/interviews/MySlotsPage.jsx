@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
   fetchMySlots,
   cancelSlot,
+  deleteSlot,
 } from "../../features/interviews/interviewSlice";
 
 export function MySlotsPage() {
@@ -32,7 +33,18 @@ export function MySlotsPage() {
     try {
       await dispatch(cancelSlot(slotId)).unwrap();
     } catch (_) {
-      // error is already handled in slice state
+    }
+  }
+
+  async function handleDeleteSlot(slotId) {
+    const confirmed = window.confirm(
+      "Are you sure you want to permanently delete this slot?",
+    );
+    if (!confirmed) return;
+
+    try {
+      await dispatch(deleteSlot(slotId)).unwrap();
+    } catch (_) {
     }
   }
 
@@ -121,7 +133,7 @@ export function MySlotsPage() {
                   </Link>
                 ) : null}
 
-                {slot.status !== "CANCELLED" ? (
+                {slot.status === "BOOKED" ? (
                   <button
                     type="button"
                     className="button button-secondary"
@@ -131,6 +143,32 @@ export function MySlotsPage() {
                     {mutationStatus === "loading"
                       ? "Cancelling..."
                       : "Cancel slot"}
+                  </button>
+                ) : null}
+
+                {slot.status === "OPEN" ? (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => handleDeleteSlot(slot.id)}
+                    disabled={mutationStatus === "loading"}
+                  >
+                    {mutationStatus === "loading"
+                      ? "Deleting..."
+                      : "Delete slot"}
+                  </button>
+                ) : null}
+
+                {slot.status === "CANCELLED" ? (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() => handleDeleteSlot(slot.id)}
+                    disabled={mutationStatus === "loading"}
+                  >
+                    {mutationStatus === "loading"
+                      ? "Deleting..."
+                      : "Delete slot"}
                   </button>
                 ) : null}
               </div>

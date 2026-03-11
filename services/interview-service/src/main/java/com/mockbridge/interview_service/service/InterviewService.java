@@ -3,7 +3,7 @@ package com.mockbridge.interview_service.service;
 import com.mockbridge.interview_service.dto.*;
 import com.mockbridge.interview_service.entity.*;
 import com.mockbridge.interview_service.repository.*;
-import com.mockbridge.interview_service.repository.BookingRepository;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -22,16 +22,15 @@ public class InterviewService {
     private final KafkaTemplate<String, String> kafkaTemplate;
 
     public InterviewService(AvailabilitySlotRepository slotRepo,
-            BookingRepository bookingRepo,
-            SessionRepository sessionRepo,
-            KafkaTemplate<String, String> kafkaTemplate) {
+                            BookingRepository bookingRepo,
+                            SessionRepository sessionRepo,
+                            KafkaTemplate<String, String> kafkaTemplate) {
         this.slotRepo = slotRepo;
         this.bookingRepo = bookingRepo;
         this.sessionRepo = sessionRepo;
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    // Interviewer creates an OPEN slot
     @Transactional
     public SlotResponse createSlot(UUID interviewerId, CreateSlotRequest req) {
         if (req.getEndTimeUtc().isBefore(req.getStartTimeUtc()) || req.getEndTimeUtc().isEqual(req.getStartTimeUtc())) {
@@ -48,27 +47,32 @@ public class InterviewService {
 
         slotRepo.save(slot);
 
-        return new SlotResponse(slot.getId(), slot.getInterviewerId(), slot.getStartTimeUtc(), slot.getEndTimeUtc(),
-                slot.getStatus().name());
+        return new SlotResponse(
+                slot.getId(),
+                slot.getInterviewerId(),
+                slot.getStartTimeUtc(),
+                slot.getEndTimeUtc(),
+                slot.getStatus().name()
+        );
     }
 
     @Transactional(readOnly = true)
     public List<SlotResponse> listOpenSlots() {
         return slotRepo.findByStatus(SlotStatus.OPEN).stream()
-                .map(s -> new SlotResponse(s.getId(), s.getInterviewerId(), s.getStartTimeUtc(), s.getEndTimeUtc(),
-                        s.getStatus().name()))
+                .map(s -> new SlotResponse(
+                        s.getId(),
+                        s.getInterviewerId(),
+                        s.getStartTimeUtc(),
+                        s.getEndTimeUtc(),
+                        s.getStatus().name()
+                ))
                 .toList();
     }
 
-    // Student books a slot with locking
     @Transactional
     public BookingResponse bookSlot(UUID studentId, UUID slotId) {
         AvailabilitySlot slot = slotRepo.findByIdForUpdate(slotId)
                 .orElseThrow(() -> new IllegalArgumentException("Slot not found"));
-
-        // if (bookingRepo.existsBySlot(slot)) {
-        // throw new IllegalArgumentException("Slot already booked");
-        // }
 
         if (slot.getStatus() != SlotStatus.OPEN) {
             throw new IllegalArgumentException("Slot is not open");
@@ -85,20 +89,20 @@ public class InterviewService {
         try {
             bookingRepo.save(booking);
         } catch (DataIntegrityViolationException e) {
-            // slot_id unique constraint hit (double booking attempt)
             throw new IllegalArgumentException("Slot already booked");
         }
 
         slot.setStatus(SlotStatus.BOOKED);
         slotRepo.save(slot);
 
-        // Kafka event (lightweight for now)
-        // kafkaTemplate.send("interview-booked", booking.getId().toString());
-
-        return new BookingResponse(booking.getId(), slot.getId(), studentId, booking.getStatus().name());
+        return new BookingResponse(
+                booking.getId(),
+                slot.getId(),
+                studentId,
+                booking.getStatus().name()
+        );
     }
 
-    // Interviewer confirms booking -> create session + roomId
     @Transactional
     public SessionResponse confirmBooking(UUID interviewerId, UUID bookingId) {
         Booking booking = bookingRepo.findById(bookingId)
@@ -110,6 +114,10 @@ public class InterviewService {
             throw new IllegalArgumentException("You do not own this booking");
         }
 
+        if (slot.getStatus() == SlotStatus.CANCELLED) {
+            throw new IllegalArgumentException("Cannot confirm booking for a cancelled slot");
+        }
+
         if (booking.getStatus() != BookingStatus.PENDING) {
             throw new IllegalArgumentException("Only PENDING bookings can be confirmed");
         }
@@ -118,7 +126,7 @@ public class InterviewService {
         booking.setUpdatedAt(LocalDateTime.now());
         bookingRepo.save(booking);
 
-        String roomId = "mock-" + booking.getId(); // Jitsi room
+        String roomId = "mock-" + booking.getId().toString().replace("-", "");
 
         Session session = new Session();
         session.setId(UUID.randomUUID());
@@ -128,10 +136,12 @@ public class InterviewService {
 
         sessionRepo.save(session);
 
-        // kafkaTemplate.send("interview-confirmed", booking.getId().toString());
-
-        return new SessionResponse(session.getId(), booking.getId(), session.getRoomId(),
-                session.getSessionStatus().name());
+        return new SessionResponse(
+                session.getId(),
+                booking.getId(),
+                session.getRoomId(),
+                session.getSessionStatus().name()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -161,7 +171,8 @@ public class InterviewService {
                 session.getId(),
                 bookingId,
                 session.getRoomId(),
-                session.getSessionStatus().name());
+                session.getSessionStatus().name()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -198,13 +209,14 @@ public class InterviewService {
                 slot.getStatus().name(),
                 slot.getStartTimeUtc(),
                 slot.getEndTimeUtc(),
-                booking.getCreatedAt());
+                booking.getCreatedAt()
+        );
     }
 
     @Transactional(readOnly = true)
-    public List<MyBookingResponse> myBooking(UUID studedId) {
-        List<Booking> bookings = bookingRepo.findByStudentIdOrderByCreatedAtDesc(studedId);
-        // System.out.println("Bookings found: " + bookings.size());
+    public List<MyBookingResponse> myBooking(UUID studentId) {
+        List<Booking> bookings = bookingRepo.findByStudentIdOrderByCreatedAtDesc(studentId);
+
         return bookings.stream()
                 .map(this::toMyBookingResponse)
                 .toList();
@@ -219,7 +231,8 @@ public class InterviewService {
                 slot.getInterviewerId(),
                 booking.getStatus().name(),
                 slot.getStartTimeUtc(),
-                slot.getEndTimeUtc());
+                slot.getEndTimeUtc()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -231,10 +244,16 @@ public class InterviewService {
                         s.getInterviewerId(),
                         s.getStartTimeUtc(),
                         s.getEndTimeUtc(),
-                        s.getStatus().name()))
+                        s.getStatus().name()
+                ))
                 .toList();
     }
 
+    /**
+     * Cancel slot.
+     * BOOKED slots should be cancelled, not deleted.
+     * This preserves history and blocks future joining.
+     */
     @Transactional
     public void cancelSlot(UUID interviewerId, UUID slotId) {
         AvailabilitySlot slot = slotRepo.findById(slotId)
@@ -258,5 +277,26 @@ public class InterviewService {
                 bookingRepo.save(booking);
             }
         });
+    }
+
+    /**
+     * Hard delete slot.
+     * Only OPEN or CANCELLED slots can be deleted.
+     * BOOKED slots must be cancelled instead.
+     */
+    @Transactional
+    public void deleteSlot(UUID interviewerId, UUID slotId) {
+        AvailabilitySlot slot = slotRepo.findById(slotId)
+                .orElseThrow(() -> new IllegalArgumentException("Slot not found"));
+
+        if (!slot.getInterviewerId().equals(interviewerId)) {
+            throw new IllegalArgumentException("You do not own this slot");
+        }
+
+        if (slot.getStatus() == SlotStatus.BOOKED) {
+            throw new IllegalArgumentException("Booked slots cannot be deleted. Cancel the slot instead.");
+        }
+
+        slotRepo.delete(slot);
     }
 }

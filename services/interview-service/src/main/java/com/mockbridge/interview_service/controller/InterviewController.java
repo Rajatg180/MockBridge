@@ -31,65 +31,43 @@ public class InterviewController {
         return ResponseEntity.ok("Interview Service is healthy");
     }
 
-    /**
-     * Option #1 (single USER):
-     * Any authenticated user can create a slot.
-     * Creating a slot means "I am acting as interviewer for this slot".
-     */
     @PostMapping("/slots")
     public SlotResponse createSlot(HttpServletRequest request, @Valid @RequestBody CreateSlotRequest req) {
         GatewayAuth auth = requireAuth(request);
         return service.createSlot(auth.getUserId(), req);
     }
 
-    /**
-     * Any user can browse open slots.
-     */
     @GetMapping("/slots/open")
     public List<SlotResponse> openSlots() {
         return service.listOpenSlots();
     }
 
-    /**
-     * Option #1 (single USER):
-     * Any authenticated user can book a slot.
-     * Booking means "I am acting as student for this booking".
-     */
     @PostMapping("/slots/{slotId}/book")
     public BookingResponse book(HttpServletRequest request, @PathVariable UUID slotId) {
         GatewayAuth auth = requireAuth(request);
         return service.bookSlot(auth.getUserId(), slotId);
     }
 
-    /**
-     * Only the slot owner can confirm a booking.
-     * Ownership is enforced inside service.confirmBooking().
-     */
     @PostMapping("/bookings/{bookingId}/confirm")
     public SessionResponse confirm(HttpServletRequest request, @PathVariable UUID bookingId) {
         GatewayAuth auth = requireAuth(request);
         return service.confirmBooking(auth.getUserId(), bookingId);
     }
 
-    /**
-     * Only participants (slot owner or booking student) can fetch session details.
-     * Enforced inside service.getSession().
-     */
     @GetMapping("/bookings/{bookingId}/session")
     public SessionResponse getSession(HttpServletRequest request, @PathVariable UUID bookingId) {
         GatewayAuth auth = requireAuth(request);
         return service.getSession(auth.getUserId(), bookingId);
     }
 
-     @GetMapping("/me/booking-requests")
+    @GetMapping("/me/booking-requests")
     public List<IncomingBookingRequestResponse> myBookingRequests(
             HttpServletRequest request,
             @RequestParam(defaultValue = "PENDING") String status) {
         GatewayAuth auth = requireAuth(request);
         return service.listIncomingBookingRequests(auth.getUserId(), status);
-    }   
+    }
 
-    // return all bookings for the authenticated user (both as interviewer and student)
     @GetMapping("/me/bookings")
     public List<MyBookingResponse> myBookings(HttpServletRequest request) {
         GatewayAuth auth = requireAuth(request);
@@ -102,6 +80,10 @@ public class InterviewController {
         return service.mySlots(auth.getUserId());
     }
 
+    /**
+     * Cancel slot.
+     * Use this for BOOKED slots or when you want to preserve history.
+     */
     @DeleteMapping("/slots/{slotId}")
     public ResponseEntity<Void> cancelSlot(HttpServletRequest request, @PathVariable UUID slotId) {
         GatewayAuth auth = requireAuth(request);
@@ -109,13 +91,23 @@ public class InterviewController {
         return ResponseEntity.noContent().build();
     }
 
-
+    /**
+     * Hard delete slot.
+     * Allowed only for OPEN or CANCELLED slots.
+     * BOOKED slots must be cancelled, not deleted.
+     */
+    @DeleteMapping("/slots/{slotId}/hard-delete")
+    public ResponseEntity<Void> deleteSlot(HttpServletRequest request, @PathVariable UUID slotId) {
+        GatewayAuth auth = requireAuth(request);
+        service.deleteSlot(auth.getUserId(), slotId);
+        return ResponseEntity.noContent().build();
+    }
 
     private GatewayAuth requireAuth(HttpServletRequest request) {
         GatewayAuth auth = authResolver.resolve(request);
-        if (auth == null)
+        if (auth == null) {
             throw new IllegalArgumentException("Missing gateway auth headers");
+        }
         return auth;
     }
-   
 }
