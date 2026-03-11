@@ -26,6 +26,7 @@ import { SessionPage } from "../pages/interviews/SessionPage";
 import { WorkspacePage } from "../pages/interviews/WorkspacePage";
 
 import { NotFoundPage } from "../pages/dashboard/NotFoundPage";
+import { MySlotsPage } from '../pages/interviews/MySlotsPage';
 
 export const router = createBrowserRouter([
   {
@@ -74,6 +75,8 @@ export const router = createBrowserRouter([
 
                   /* VIDEO SESSION */
                   { path: "session/:bookingId", element: <SessionPage /> },
+
+                  { path: 'my-slots', element: <MySlotsPage /> },
 
                   { path: "workspace", element: <WorkspacePage /> },
                 ],

@@ -93,7 +93,7 @@ public class InterviewService {
         slotRepo.save(slot);
 
         // Kafka event (lightweight for now)
-        kafkaTemplate.send("interview-booked", booking.getId().toString());
+        // kafkaTemplate.send("interview-booked", booking.getId().toString());
 
         return new BookingResponse(booking.getId(), slot.getId(), studentId, booking.getStatus().name());
     }
@@ -128,7 +128,7 @@ public class InterviewService {
 
         sessionRepo.save(session);
 
-        kafkaTemplate.send("interview-confirmed", booking.getId().toString());
+        // kafkaTemplate.send("interview-confirmed", booking.getId().toString());
 
         return new SessionResponse(session.getId(), booking.getId(), session.getRoomId(),
                 session.getSessionStatus().name());
@@ -146,10 +146,22 @@ public class InterviewService {
             throw new IllegalArgumentException("You are not part of this booking");
         }
 
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new IllegalArgumentException("This interview was cancelled");
+        }
+
+        if (booking.getSlot().getStatus() == SlotStatus.CANCELLED) {
+            throw new IllegalArgumentException("This slot was cancelled");
+        }
+
         Session session = sessionRepo.findByBooking_Id(bookingId)
                 .orElseThrow(() -> new IllegalArgumentException("Session not created yet"));
 
-        return new SessionResponse(session.getId(), bookingId, session.getRoomId(), session.getSessionStatus().name());
+        return new SessionResponse(
+                session.getId(),
+                bookingId,
+                session.getRoomId(),
+                session.getSessionStatus().name());
     }
 
     @Transactional(readOnly = true)
@@ -190,7 +202,7 @@ public class InterviewService {
     }
 
     @Transactional(readOnly = true)
-    public List<MyBookingResponse> myBooking(UUID studedId){
+    public List<MyBookingResponse> myBooking(UUID studedId) {
         List<Booking> bookings = bookingRepo.findByStudentIdOrderByCreatedAtDesc(studedId);
         // System.out.println("Bookings found: " + bookings.size());
         return bookings.stream()
@@ -208,5 +220,43 @@ public class InterviewService {
                 booking.getStatus().name(),
                 slot.getStartTimeUtc(),
                 slot.getEndTimeUtc());
+    }
+
+    @Transactional(readOnly = true)
+    public List<SlotResponse> mySlots(UUID interviewerId) {
+        return slotRepo.findByInterviewerIdOrderByStartTimeUtcDesc(interviewerId)
+                .stream()
+                .map(s -> new SlotResponse(
+                        s.getId(),
+                        s.getInterviewerId(),
+                        s.getStartTimeUtc(),
+                        s.getEndTimeUtc(),
+                        s.getStatus().name()))
+                .toList();
+    }
+
+    @Transactional
+    public void cancelSlot(UUID interviewerId, UUID slotId) {
+        AvailabilitySlot slot = slotRepo.findById(slotId)
+                .orElseThrow(() -> new IllegalArgumentException("Slot not found"));
+
+        if (!slot.getInterviewerId().equals(interviewerId)) {
+            throw new IllegalArgumentException("You do not own this slot");
+        }
+
+        if (slot.getStatus() == SlotStatus.CANCELLED) {
+            return;
+        }
+
+        slot.setStatus(SlotStatus.CANCELLED);
+        slotRepo.save(slot);
+
+        bookingRepo.findBySlot_Id(slotId).ifPresent(booking -> {
+            if (booking.getStatus() == BookingStatus.PENDING || booking.getStatus() == BookingStatus.CONFIRMED) {
+                booking.setStatus(BookingStatus.CANCELLED);
+                booking.setUpdatedAt(LocalDateTime.now());
+                bookingRepo.save(booking);
+            }
+        });
     }
 }

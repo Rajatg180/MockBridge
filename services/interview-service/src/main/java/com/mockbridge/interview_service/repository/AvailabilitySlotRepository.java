@@ -18,6 +18,9 @@ public interface AvailabilitySlotRepository extends JpaRepository<AvailabilitySl
 
     List<AvailabilitySlot> findByInterviewerId(UUID interviewerId);
 
+    //  will return all slots for the interviewer, ordered by start time descending (most recent first)
+    List<AvailabilitySlot> findByInterviewerIdOrderByStartTimeUtcDesc(UUID interviewerId);
+
     List<AvailabilitySlot> findByStatus(SlotStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

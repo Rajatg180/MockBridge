@@ -7,7 +7,7 @@ export const MyBookingsPage = () => {
   const dispatch = useDispatch();
 
   const { myBookings, myBookingsStatus } = useSelector(
-    (state) => state.interviews
+    (state) => state.interviews,
   );
 
   useEffect(() => {
@@ -28,8 +28,12 @@ export const MyBookingsPage = () => {
 
       {myBookings.map((b) => (
         <div key={b.bookingId} className="card">
-          <p><strong>Booking ID:</strong> {b.bookingId}</p>
-          <p><strong>Interviewer:</strong> {b.interviewerId}</p>
+          <p>
+            <strong>Booking ID:</strong> {b.bookingId}
+          </p>
+          <p>
+            <strong>Interviewer:</strong> {b.interviewerId}
+          </p>
 
           <p>
             <strong>Time:</strong>{" "}
@@ -41,11 +45,14 @@ export const MyBookingsPage = () => {
             <strong>Status:</strong> {b.bookingStatus}
           </p>
 
+          {b.bookingStatus === "CANCELLED" ? (
+            <div className="card subtle">
+              This interview was cancelled by the interviewer.
+            </div>
+          ) : null}
+
           {b.bookingStatus === "CONFIRMED" && (
-            <Link
-              to={`/session/${b.bookingId}`}
-              className="button"
-            >
+            <Link to={`/session/${b.bookingId}`} className="button">
               Join Interview
             </Link>
           )}

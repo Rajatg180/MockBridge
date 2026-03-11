@@ -96,6 +96,21 @@ public class InterviewController {
         return service.myBooking(auth.getUserId());
     }
 
+    @GetMapping("/me/slots")
+    public List<SlotResponse> mySlots(HttpServletRequest request) {
+        GatewayAuth auth = requireAuth(request);
+        return service.mySlots(auth.getUserId());
+    }
+
+    @DeleteMapping("/slots/{slotId}")
+    public ResponseEntity<Void> cancelSlot(HttpServletRequest request, @PathVariable UUID slotId) {
+        GatewayAuth auth = requireAuth(request);
+        service.cancelSlot(auth.getUserId(), slotId);
+        return ResponseEntity.noContent().build();
+    }
+
+
+
     private GatewayAuth requireAuth(HttpServletRequest request) {
         GatewayAuth auth = authResolver.resolve(request);
         if (auth == null)
