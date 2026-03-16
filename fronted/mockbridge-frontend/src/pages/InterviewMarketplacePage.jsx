@@ -136,8 +136,8 @@ export default function InterviewMarketplacePage() {
           title="No interviewers found"
           description={
             marketplace.lastQuery
-              ? 'Try a broader keyword. Search works with the interviewer skill search endpoint and profile text.'
-              : 'There are no open slots right now.'
+              ? 'Try a broader keyword. Search now includes interviewer profiles even if they do not currently have open slots.'
+              : 'There are no interviewers or open slots available right now.'
           }
         />
       ) : null}
@@ -171,23 +171,30 @@ export default function InterviewMarketplacePage() {
                 </div>
               ) : null}
 
-              <div className="slot-list">
-                {item.slots.map((slot) => (
-                  <button
-                    type="button"
-                    key={slot.id}
-                    className="slot-button"
-                    onClick={() => setSlotToBook(slot)}
-                  >
-                    <div>
-                      <strong>{utcRangeToLocalLabel(slot.startTimeUtc, slot.endTimeUtc)}</strong>
-                      <p>Hosted by {slot.interviewerName || item.fullName}</p>
-                      {slot.interviewerHeadline ? <p>{slot.interviewerHeadline}</p> : null}
-                    </div>
-                    <span>Book</span>
-                  </button>
-                ))}
-              </div>
+              {item.slots.length ? (
+                <div className="slot-list">
+                  {item.slots.map((slot) => (
+                    <button
+                      type="button"
+                      key={slot.id}
+                      className="slot-button"
+                      onClick={() => setSlotToBook(slot)}
+                    >
+                      <div>
+                        <strong>{utcRangeToLocalLabel(slot.startTimeUtc, slot.endTimeUtc)}</strong>
+                        <p>Hosted by {slot.interviewerName || item.fullName}</p>
+                        {slot.interviewerHeadline ? <p>{slot.interviewerHeadline}</p> : null}
+                      </div>
+                      <span>Book</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No open slots right now"
+                  description="This interviewer matches your search, but has not published an open slot yet."
+                />
+              )}
             </div>
           </article>
         ))}

@@ -98,8 +98,86 @@ function hydrateMarketplaceItems(uniqueInterviewerIds, groupedSlots, profileMap)
         slots,
       };
     })
-    .filter((item) => item.slots.length > 0)
-    .sort((left, right) => compareStartTimes(left.slots[0], right.slots[0]));
+    .sort((left, right) => {
+      const leftHasSlots = left.slots.length > 0;
+      const rightHasSlots = right.slots.length > 0;
+
+      if (leftHasSlots && rightHasSlots) {
+        return compareStartTimes(left.slots[0], right.slots[0]);
+      }
+
+      if (leftHasSlots) {
+        return -1;
+      }
+
+      if (rightHasSlots) {
+        return 1;
+      }
+
+      return left.fullName.localeCompare(right.fullName);
+    });
+}
+
+function dedupeProfilesByUserId(profiles) {
+  const unique = new Map();
+
+  for (const profile of profiles || []) {
+    if (profile?.userId) {
+      unique.set(profile.userId, profile);
+    }
+  }
+
+  return [...unique.values()];
+}
+
+function filterMarketplaceItems(items, normalizedQuery, backendMatchedIds) {
+  if (!normalizedQuery) {
+    return items;
+  }
+
+  return items.filter((item) => {
+    if (backendMatchedIds.has(item.userId)) {
+      return true;
+    }
+
+    return profileMatchesSearch(item, normalizedQuery);
+  });
+}
+
+function sortMarketplaceItems(items, normalizedQuery, backendMatchedIds) {
+  if (!normalizedQuery) {
+    return items;
+  }
+
+  return [...items].sort((left, right) => {
+    const leftBackendMatch = backendMatchedIds.has(left.userId);
+    const rightBackendMatch = backendMatchedIds.has(right.userId);
+
+    if (leftBackendMatch && !rightBackendMatch) {
+      return -1;
+    }
+
+    if (!leftBackendMatch && rightBackendMatch) {
+      return 1;
+    }
+
+    const leftHasSlots = left.slots.length > 0;
+    const rightHasSlots = right.slots.length > 0;
+
+    if (leftHasSlots && rightHasSlots) {
+      return compareStartTimes(left.slots[0], right.slots[0]);
+    }
+
+    if (leftHasSlots) {
+      return -1;
+    }
+
+    if (rightHasSlots) {
+      return 1;
+    }
+
+    return left.fullName.localeCompare(right.fullName);
+  });
 }
 
 function createInitialState() {
@@ -145,58 +223,64 @@ export const fetchMarketplace = createAsyncThunk(
     try {
       const query = String(searchText || '').trim();
       const normalizedQuery = normalizeSearchValue(query);
+
       const openSlots = await interviewApi.getOpenSlots();
       const sortedSlots = [...openSlots].sort(compareStartTimes);
+      const groupedSlots = groupSlotsByInterviewer(sortedSlots);
+      const slotInterviewerIds = [
+        ...new Set(sortedSlots.map((slot) => slot.interviewerId).filter(Boolean)),
+      ];
 
-      if (!sortedSlots.length) {
+      let searchProfiles = [];
+
+      if (normalizedQuery) {
+        searchProfiles = await userApi.searchInterviewers(query).catch(() => []);
+      }
+
+      const mergedSearchProfiles = dedupeProfilesByUserId(searchProfiles);
+      const allInterviewerIds = [
+        ...new Set([
+          ...slotInterviewerIds,
+          ...mergedSearchProfiles.map((profile) => profile.userId).filter(Boolean),
+        ]),
+      ];
+
+      if (!allInterviewerIds.length) {
         return {
           items: [],
           lastQuery: query,
         };
       }
 
-      const uniqueInterviewerIds = [
-        ...new Set(sortedSlots.map((slot) => slot.interviewerId).filter(Boolean)),
-      ];
+      const profileMap = await loadProfileMapByIds(allInterviewerIds, 'Interviewer');
 
-      const searchProfiles = normalizedQuery
-        ? await userApi.searchInterviewers(query).catch(() => [])
-        : [];
-
-      const groupedSlots = groupSlotsByInterviewer(sortedSlots);
-      const profileMap = await loadProfileMapByIds(
-        [
-          ...uniqueInterviewerIds,
-          ...searchProfiles.map((profile) => profile.userId),
-        ],
-        'Interviewer',
-      );
-
-      for (const profile of searchProfiles) {
+      for (const profile of mergedSearchProfiles) {
         if (profile?.userId) {
           profileMap.set(profile.userId, profile);
         }
       }
 
       const backendMatchedIds = new Set(
-        searchProfiles.map((profile) => profile.userId).filter(Boolean),
+        mergedSearchProfiles.map((profile) => profile.userId).filter(Boolean),
       );
 
-      const items = hydrateMarketplaceItems(
-        uniqueInterviewerIds,
+      const baseItems = hydrateMarketplaceItems(
+        allInterviewerIds,
         groupedSlots,
         profileMap,
-      ).filter((item) => {
-        if (!normalizedQuery) {
-          return true;
-        }
+      );
 
-        if (backendMatchedIds.has(item.userId)) {
-          return true;
-        }
+      const filteredItems = filterMarketplaceItems(
+        baseItems,
+        normalizedQuery,
+        backendMatchedIds,
+      );
 
-        return profileMatchesSearch(item, normalizedQuery);
-      });
+      const items = sortMarketplaceItems(
+        filteredItems,
+        normalizedQuery,
+        backendMatchedIds,
+      );
 
       return {
         items,
