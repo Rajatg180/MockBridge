@@ -61,6 +61,13 @@ public class InterviewController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/bookings/{bookingId}/access")
+    public ResponseEntity<Void> validateBookingAccess(HttpServletRequest request, @PathVariable UUID bookingId) {
+        GatewayAuth auth = requireAuth(request);
+        service.assertParticipantAccess(auth.getUserId(), bookingId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/bookings/{bookingId}/session")
     public SessionResponse getSession(HttpServletRequest request, @PathVariable UUID bookingId) {
         GatewayAuth auth = requireAuth(request);
@@ -87,10 +94,6 @@ public class InterviewController {
         return service.mySlots(auth.getUserId());
     }
 
-    /**
-     * Cancel slot.
-     * Use this for BOOKED slots or when you want to preserve history.
-     */
     @DeleteMapping("/slots/{slotId}")
     public ResponseEntity<Void> cancelSlot(HttpServletRequest request, @PathVariable UUID slotId) {
         GatewayAuth auth = requireAuth(request);
@@ -98,11 +101,6 @@ public class InterviewController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * Hard delete slot.
-     * Allowed only for OPEN or CANCELLED slots.
-     * BOOKED slots must be cancelled, not deleted.
-     */
     @DeleteMapping("/slots/{slotId}/hard-delete")
     public ResponseEntity<Void> deleteSlot(HttpServletRequest request, @PathVariable UUID slotId) {
         GatewayAuth auth = requireAuth(request);

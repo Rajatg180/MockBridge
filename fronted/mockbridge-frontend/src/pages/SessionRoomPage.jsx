@@ -9,8 +9,13 @@ import {
   clearSessionLookup,
   fetchBookingSession,
 } from '../features/interview/interviewSlice';
+import {
+  fetchChatMessages,
+  resetChatState,
+  sendChatMessage,
+} from '../features/chat/chatSlice';
 import { addToast } from '../features/ui/uiSlice';
-import { utcRangeToLocalLabel } from '../utils/date';
+import { utcDateTimeToLocalLabel, utcRangeToLocalLabel } from '../utils/date';
 import { getErrorMessage } from '../utils/http';
 import {
   disposeJitsiApi,
@@ -46,6 +51,7 @@ export default function SessionRoomPage() {
   const authUser = useSelector((state) => state.auth.user);
   const profile = useSelector((state) => state.profile.profile);
   const sessionLookup = useSelector((state) => state.interview.sessionLookup);
+  const chatState = useSelector((state) => state.chat);
 
   const [sessionContext, setSessionContext] = useState(() => {
     const incomingContext = location.state?.sessionContext || null;
@@ -58,15 +64,18 @@ export default function SessionRoomPage() {
     error: '',
   });
   const [meetingRetryKey, setMeetingRetryKey] = useState(0);
+  const [messageInput, setMessageInput] = useState('');
 
   const jitsiContainerRef = useRef(null);
   const jitsiApiRef = useRef(null);
+  const chatMessagesEndRef = useRef(null);
 
   const bookingId = sessionContext?.bookingId || null;
   const effectiveRoomId = sessionContext?.roomId || routeRoomId;
   const domain = getJitsiDomain();
   const currentDisplayName = profile?.fullName || authUser?.email || 'MockBridge User';
   const currentEmail = profile?.email || authUser?.email || '';
+  const currentUserId = authUser?.userId || null;
 
   useEffect(() => {
     const incomingContext = location.state?.sessionContext || null;
@@ -85,59 +94,30 @@ export default function SessionRoomPage() {
   }, [location.state, routeRoomId]);
 
   useEffect(() => {
-    if (!bookingId) {
-      return undefined;
+  if (!bookingId) {
+    return undefined;
+  }
+
+  let isCancelled = false;
+
+  const loadMessages = () => {
+    if (isCancelled) {
+      return;
     }
+    dispatch(fetchChatMessages(bookingId));
+  };
 
-    let isMounted = true;
+  loadMessages();
 
-    dispatch(fetchBookingSession(bookingId))
-      .unwrap()
-      .then((session) => {
-        if (!isMounted) {
-          return;
-        }
+  const intervalId = window.setInterval(() => {
+    loadMessages();
+  }, 2000);
 
-        setSessionContext((current) => {
-          const nextContext = {
-            ...(current || {}),
-            bookingId,
-            roomId: session.roomId,
-            sessionStatus: session.sessionStatus,
-          };
-
-          saveActiveSessionRoom(nextContext);
-
-          if (session.roomId && session.roomId !== routeRoomId) {
-            navigate(buildSessionRoomPath(session.roomId), {
-              replace: true,
-              state: {
-                sessionContext: nextContext,
-              },
-            });
-          }
-
-          return nextContext;
-        });
-      })
-      .catch((error) => {
-        if (!isMounted) {
-          return;
-        }
-
-        dispatch(
-          addToast({
-            type: 'error',
-            title: 'Session unavailable',
-            message: getErrorMessage(error, 'Unable to load the session right now.'),
-          }),
-        );
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [bookingId, dispatch, navigate, routeRoomId]);
+  return () => {
+    isCancelled = true;
+    window.clearInterval(intervalId);
+  };
+}, [bookingId, dispatch]);
 
   useEffect(() => {
     if (!effectiveRoomId || !jitsiContainerRef.current) {
@@ -198,6 +178,7 @@ export default function SessionRoomPage() {
 
           clearActiveSessionRoom();
           dispatch(clearSessionLookup());
+          dispatch(resetChatState());
         });
       })
       .catch((error) => {
@@ -222,6 +203,32 @@ export default function SessionRoomPage() {
     };
   }, [currentDisplayName, currentEmail, dispatch, domain, effectiveRoomId, meetingRetryKey]);
 
+  useEffect(() => {
+    if (!bookingId) {
+      return undefined;
+    }
+
+    dispatch(fetchChatMessages(bookingId));
+
+    const intervalId = window.setInterval(() => {
+      dispatch(fetchChatMessages(bookingId));
+    }, 3000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [bookingId, dispatch]);
+
+  useEffect(() => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatState.items.length]);
+
+  useEffect(() => {
+    return () => {
+      dispatch(resetChatState());
+    };
+  }, [dispatch]);
+
   const counterpartLabel = useMemo(() => {
     if (sessionContext?.role === 'interviewer') {
       return 'Candidate';
@@ -236,6 +243,7 @@ export default function SessionRoomPage() {
   const leaveSession = () => {
     clearActiveSessionRoom();
     dispatch(clearSessionLookup());
+    dispatch(resetChatState());
     navigate(backTo, { replace: true });
   };
 
@@ -275,6 +283,28 @@ export default function SessionRoomPage() {
           type: 'error',
           title: 'Refresh failed',
           message: getErrorMessage(error, 'Unable to refresh the session.'),
+        }),
+      );
+    }
+  };
+
+  const handleSendMessage = async (event) => {
+    event.preventDefault();
+
+    const content = messageInput.trim();
+    if (!content || !bookingId) {
+      return;
+    }
+
+    try {
+      await dispatch(sendChatMessage({ bookingId, content })).unwrap();
+      setMessageInput('');
+    } catch (error) {
+      dispatch(
+        addToast({
+          type: 'error',
+          title: 'Message failed',
+          message: getErrorMessage(error, 'Unable to send your message.'),
         }),
       );
     }
@@ -379,35 +409,124 @@ export default function SessionRoomPage() {
           <div ref={jitsiContainerRef} className="jitsi-container" />
         </article>
 
-        <article className="card stack session-sidebar">
-          <div>
-            <p className="eyebrow">Participants</p>
-            <h2>{counterpartLabel}</h2>
-          </div>
+        <aside className="session-sidebar-panel">
+          <article className="card stack session-sidebar">
+            <div>
+              <p className="eyebrow">Participants</p>
+              <h2>{counterpartLabel}</h2>
+            </div>
 
-          <div className="detail-tile">
-            <strong>{sessionContext?.counterpartName || counterpartLabel}</strong>
-            {sessionContext?.counterpartHeadline ? (
-              <p>{sessionContext.counterpartHeadline}</p>
-            ) : (
-              <p>{counterpartLabel} details are available from the profile service.</p>
-            )}
-          </div>
+            <div className="detail-tile">
+              <strong>{sessionContext?.counterpartName || counterpartLabel}</strong>
+              {sessionContext?.counterpartHeadline ? (
+                <p>{sessionContext.counterpartHeadline}</p>
+              ) : (
+                <p>{counterpartLabel} details are available from the profile service.</p>
+              )}
+            </div>
 
-          <div className="detail-tile">
-            <strong>Your join code</strong>
-            <p>{effectiveRoomId}</p>
-          </div>
+            <div className="detail-tile">
+              <strong>Your join code</strong>
+              <p>{effectiveRoomId}</p>
+            </div>
 
-          <div className="detail-tile">
-            <strong>Schedule</strong>
-            <p>{utcRangeToLocalLabel(sessionContext?.startTimeUtc, sessionContext?.endTimeUtc)}</p>
-          </div>
+            <div className="detail-tile">
+              <strong>Schedule</strong>
+              <p>{utcRangeToLocalLabel(sessionContext?.startTimeUtc, sessionContext?.endTimeUtc)}</p>
+            </div>
 
-          <div className="inline-note">
-            This room uses the shared Jitsi meeting for the confirmed booking.
-          </div>
-        </article>
+            <div className="inline-note">
+              This room uses the shared Jitsi meeting for the confirmed booking.
+            </div>
+          </article>
+
+          <article className="card chat-panel">
+            <div className="card__header chat-panel__header">
+              <div>
+                <p className="eyebrow">Session chat</p>
+                <h2>Live conversation</h2>
+              </div>
+              <span className="badge">{chatState.items.length} messages</span>
+            </div>
+
+            {chatState.status === 'loading' && !chatState.items.length ? (
+              <Loader label="Loading chat..." />
+            ) : null}
+
+            {chatState.status === 'failed' && chatState.error ? (
+              <ErrorBlock
+                title="Could not load chat"
+                message={chatState.error.message}
+                action={
+                  bookingId ? (
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      onClick={() => dispatch(fetchChatMessages(bookingId))}
+                    >
+                      Retry
+                    </button>
+                  ) : null
+                }
+              />
+            ) : null}
+
+            <div className="chat-messages">
+              {!chatState.items.length ? (
+                <div className="chat-empty">
+                  <p>No messages yet. Start the conversation.</p>
+                </div>
+              ) : (
+                chatState.items.map((message) => {
+                  const isOwn = message.senderUserId === currentUserId;
+                  const senderLabel = isOwn
+                    ? 'You'
+                    : sessionContext?.counterpartName ||
+                      (message.senderRole === 'INTERVIEWER' ? 'Interviewer' : 'Student');
+
+                  return (
+                    <div
+                      key={message.id}
+                      className={`chat-message ${isOwn ? 'chat-message--own' : ''}`}
+                    >
+                      <div className="chat-message__meta">
+                        <strong>{senderLabel}</strong>
+                        <span>{utcDateTimeToLocalLabel(message.createdAt)}</span>
+                      </div>
+                      <p>{message.content}</p>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatMessagesEndRef} />
+            </div>
+
+            <form className="chat-form" onSubmit={handleSendMessage}>
+              <textarea
+                className="textarea"
+                rows={3}
+                placeholder="Type your message..."
+                value={messageInput}
+                onChange={(event) => setMessageInput(event.target.value)}
+                maxLength={1000}
+              />
+              <div className="chat-form__actions">
+                <span className="chat-form__hint">{messageInput.length}/1000</span>
+                <button
+                  type="submit"
+                  className="button button--primary"
+                  disabled={
+                    !bookingId ||
+                    !messageInput.trim() ||
+                    chatState.sendStatus === 'loading'
+                  }
+                >
+                  {chatState.sendStatus === 'loading' ? 'Sending...' : 'Send'}
+                </button>
+              </div>
+            </form>
+          </article>
+        </aside>
       </section>
     </div>
   );

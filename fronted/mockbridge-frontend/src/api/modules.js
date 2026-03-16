@@ -127,3 +127,17 @@ export const interviewApi = {
       .then((response) => response.data);
   },
 };
+
+export const chatApi = {
+  getMessages(bookingId) {
+    return apiClient
+      .get(`/chat/rooms/${bookingId}/messages`)
+      .then((response) => response.data);
+  },
+
+  sendMessage(bookingId, payload) {
+    return apiClient
+      .post(`/chat/rooms/${bookingId}/messages`, payload)
+      .then((response) => response.data);
+  },
+};

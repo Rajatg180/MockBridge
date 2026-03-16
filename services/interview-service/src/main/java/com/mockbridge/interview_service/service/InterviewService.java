@@ -78,7 +78,6 @@ public class InterviewService {
             throw new IllegalArgumentException("Slot is not open");
         }
 
-        // Students cannot book their own slots
         if (slot.getInterviewerId().equals(studentId)) {
             throw new IllegalArgumentException("You cannot book your own slot");
         }
@@ -181,7 +180,7 @@ public class InterviewService {
     }
 
     @Transactional(readOnly = true)
-    public SessionResponse getSession(UUID requesterUserId, UUID bookingId) {
+    public void assertParticipantAccess(UUID requesterUserId, UUID bookingId) {
         Booking booking = bookingRepo.findById(bookingId)
                 .orElseThrow(() -> new IllegalArgumentException("Booking not found"));
 
@@ -193,12 +192,17 @@ public class InterviewService {
         }
 
         if (booking.getStatus() == BookingStatus.CANCELLED) {
-            throw new IllegalArgumentException("This interview was cancelled");
+            throw new IllegalArgumentException("This booking was cancelled");
         }
 
         if (booking.getSlot().getStatus() == SlotStatus.CANCELLED) {
             throw new IllegalArgumentException("This slot was cancelled");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public SessionResponse getSession(UUID requesterUserId, UUID bookingId) {
+        assertParticipantAccess(requesterUserId, bookingId);
 
         Session session = sessionRepo.findByBooking_Id(bookingId)
                 .orElseThrow(() -> new IllegalArgumentException("Session not created yet"));

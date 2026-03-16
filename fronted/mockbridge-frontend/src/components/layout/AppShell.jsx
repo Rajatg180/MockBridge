@@ -5,6 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { logoutUser } from '../../features/auth/authSlice';
 import { resetProfileState } from '../../features/profile/profileSlice';
 import { resetInterviewState } from '../../features/interview/interviewSlice';
+import { resetChatState } from '../../features/chat/chatSlice';
 import { addToast } from '../../features/ui/uiSlice';
 import { clearActiveSessionRoom } from '../../utils/sessionRoomStorage';
 
@@ -31,6 +32,7 @@ export default function AppShell() {
     await dispatch(logoutUser());
     dispatch(resetProfileState());
     dispatch(resetInterviewState());
+    dispatch(resetChatState());
     clearActiveSessionRoom();
     dispatch(
       addToast({

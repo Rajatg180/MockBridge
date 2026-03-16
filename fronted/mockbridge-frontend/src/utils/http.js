@@ -14,7 +14,6 @@ export function normalizeApiError(error) {
       timestamp: data.timestamp || null,
       isNetworkError: false,
       isNormalized: true,
-      original: error,
     };
   }
 
@@ -28,7 +27,6 @@ export function normalizeApiError(error) {
       timestamp: null,
       isNetworkError: true,
       isNormalized: true,
-      original: error,
     };
   }
 
@@ -40,7 +38,6 @@ export function normalizeApiError(error) {
     timestamp: null,
     isNetworkError: false,
     isNormalized: true,
-    original: error,
   };
 }
 
