@@ -1,174 +1,532 @@
-import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import {
-  bookSlot,
-  confirmBooking,
-  createSlot,
-  getOpenSlots,
-  getSessionByBookingId,
-} from "../../api/interviewApi";
-import { extractApiMessage } from "../../api/apiClient";
+import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 
-export const fetchOpenSlots = createAsyncThunk(
-  "interview/fetchOpenSlots",
-  async (_, { rejectWithValue }) => {
-    try {
-      return await getOpenSlots();
-    } catch (error) {
-      return rejectWithValue(extractApiMessage(error));
-    }
+import { interviewApi, userApi } from '../../api/modules';
+import { normalizeApiError } from '../../utils/http';
+
+function compareStartTimes(a, b) {
+  return new Date(`${a.startTimeUtc}Z`) - new Date(`${b.startTimeUtc}Z`);
+}
+
+function normalizeSearchValue(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function buildFallbackProfile(userId, fallbackName = 'Member') {
+  return {
+    userId,
+    fullName: fallbackName,
+    headline: 'Profile not available yet',
+    bio: '',
+    yearsOfExperience: 0,
+    averageRating: 0,
+    skills: [],
+  };
+}
+
+function groupSlotsByInterviewer(slots) {
+  return slots.reduce((map, slot) => {
+    const current = map.get(slot.interviewerId) || [];
+    current.push(slot);
+    map.set(slot.interviewerId, current);
+    return map;
+  }, new Map());
+}
+
+async function loadProfilesByIds(userIds, fallbackName = 'Member') {
+  const uniqueIds = [...new Set((userIds || []).filter(Boolean))];
+
+  if (!uniqueIds.length) {
+    return [];
   }
+
+  const results = await Promise.all(
+    uniqueIds.map(async (userId) => {
+      try {
+        return await userApi.getPublicProfile(userId);
+      } catch {
+        return buildFallbackProfile(userId, fallbackName);
+      }
+    }),
+  );
+
+  return results;
+}
+
+async function loadProfileMapByIds(userIds, fallbackName = 'Member') {
+  const profiles = await loadProfilesByIds(userIds, fallbackName);
+  return new Map(profiles.map((profile) => [profile.userId, profile]));
+}
+
+function profileMatchesSearch(profile, query) {
+  if (!query) {
+    return true;
+  }
+
+  const haystack = [
+    profile.fullName,
+    profile.headline,
+    profile.bio,
+    ...(profile.skills || []).flatMap((skill) => [skill.skillName, skill.proficiency]),
+  ]
+    .map(normalizeSearchValue)
+    .filter(Boolean)
+    .join(' ');
+
+  return haystack.includes(query);
+}
+
+function hydrateMarketplaceItems(uniqueInterviewerIds, groupedSlots, profileMap) {
+  return uniqueInterviewerIds
+    .map((userId) => {
+      const profile = profileMap.get(userId) || buildFallbackProfile(userId, 'Interviewer');
+      const slots = [...(groupedSlots.get(userId) || [])]
+        .sort(compareStartTimes)
+        .map((slot) => ({
+          ...slot,
+          interviewerName: profile.fullName || 'Interviewer',
+          interviewerHeadline: profile.headline || '',
+        }));
+
+      return {
+        userId,
+        fullName: profile.fullName || 'Interviewer',
+        headline: profile.headline || 'Mock interview expert',
+        bio: profile.bio || '',
+        yearsOfExperience: profile.yearsOfExperience || 0,
+        averageRating: Number(profile.averageRating || 0),
+        skills: profile.skills || [],
+        slots,
+      };
+    })
+    .filter((item) => item.slots.length > 0)
+    .sort((left, right) => compareStartTimes(left.slots[0], right.slots[0]));
+}
+
+function createInitialState() {
+  return {
+    marketplace: {
+      items: [],
+      status: 'idle',
+      error: null,
+      lastQuery: '',
+    },
+    mySlots: {
+      items: [],
+      status: 'idle',
+      error: null,
+    },
+    incomingRequests: {
+      items: [],
+      status: 'idle',
+      error: null,
+      filter: 'PENDING',
+    },
+    myBookings: {
+      items: [],
+      status: 'idle',
+      error: null,
+    },
+    sessionLookup: {
+      data: null,
+      status: 'idle',
+      error: null,
+    },
+    mutation: {
+      status: 'idle',
+      error: null,
+      kind: null,
+    },
+  };
+}
+
+export const fetchMarketplace = createAsyncThunk(
+  'interview/fetchMarketplace',
+  async (searchText = '', { rejectWithValue }) => {
+    try {
+      const query = String(searchText || '').trim();
+      const normalizedQuery = normalizeSearchValue(query);
+      const openSlots = await interviewApi.getOpenSlots();
+      const sortedSlots = [...openSlots].sort(compareStartTimes);
+
+      if (!sortedSlots.length) {
+        return {
+          items: [],
+          lastQuery: query,
+        };
+      }
+
+      const uniqueInterviewerIds = [
+        ...new Set(sortedSlots.map((slot) => slot.interviewerId).filter(Boolean)),
+      ];
+
+      const searchProfiles = normalizedQuery
+        ? await userApi.searchInterviewers(query).catch(() => [])
+        : [];
+
+      const groupedSlots = groupSlotsByInterviewer(sortedSlots);
+      const profileMap = await loadProfileMapByIds(
+        [
+          ...uniqueInterviewerIds,
+          ...searchProfiles.map((profile) => profile.userId),
+        ],
+        'Interviewer',
+      );
+
+      for (const profile of searchProfiles) {
+        if (profile?.userId) {
+          profileMap.set(profile.userId, profile);
+        }
+      }
+
+      const backendMatchedIds = new Set(
+        searchProfiles.map((profile) => profile.userId).filter(Boolean),
+      );
+
+      const items = hydrateMarketplaceItems(
+        uniqueInterviewerIds,
+        groupedSlots,
+        profileMap,
+      ).filter((item) => {
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        if (backendMatchedIds.has(item.userId)) {
+          return true;
+        }
+
+        return profileMatchesSearch(item, normalizedQuery);
+      });
+
+      return {
+        items,
+        lastQuery: query,
+      };
+    } catch (error) {
+      return rejectWithValue(normalizeApiError(error));
+    }
+  },
 );
 
-export const submitCreateSlot = createAsyncThunk(
-  "interview/submitCreateSlot",
-  async (payload, { rejectWithValue }) => {
-    try {
-      return await createSlot(payload);
-    } catch (error) {
-      return rejectWithValue(extractApiMessage(error));
-    }
-  }
-);
-
-export const submitBookSlot = createAsyncThunk(
-  "interview/submitBookSlot",
+export const bookMarketplaceSlot = createAsyncThunk(
+  'interview/bookMarketplaceSlot',
   async (slotId, { rejectWithValue }) => {
     try {
-      return await bookSlot(slotId);
+      return await interviewApi.bookSlot(slotId);
     } catch (error) {
-      return rejectWithValue(extractApiMessage(error));
+      return rejectWithValue(normalizeApiError(error));
     }
-  }
+  },
 );
 
-export const submitConfirmBooking = createAsyncThunk(
-  "interview/submitConfirmBooking",
-  async (bookingId, { rejectWithValue }) => {
+export const fetchMySlots = createAsyncThunk(
+  'interview/fetchMySlots',
+  async (_, { rejectWithValue }) => {
     try {
-      return await confirmBooking(bookingId);
+      return await interviewApi.getMySlots();
     } catch (error) {
-      return rejectWithValue(extractApiMessage(error));
+      return rejectWithValue(normalizeApiError(error));
     }
-  }
+  },
 );
 
-export const fetchSessionByBookingId = createAsyncThunk(
-  "interview/fetchSessionByBookingId",
+export const createAvailabilitySlot = createAsyncThunk(
+  'interview/createAvailabilitySlot',
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await interviewApi.createSlot(payload);
+    } catch (error) {
+      return rejectWithValue(normalizeApiError(error));
+    }
+  },
+);
+
+export const cancelAvailabilitySlot = createAsyncThunk(
+  'interview/cancelAvailabilitySlot',
+  async (slotId, { rejectWithValue }) => {
+    try {
+      await interviewApi.cancelSlot(slotId);
+      return slotId;
+    } catch (error) {
+      return rejectWithValue(normalizeApiError(error));
+    }
+  },
+);
+
+export const deleteAvailabilitySlot = createAsyncThunk(
+  'interview/deleteAvailabilitySlot',
+  async (slotId, { rejectWithValue }) => {
+    try {
+      await interviewApi.hardDeleteSlot(slotId);
+      return slotId;
+    } catch (error) {
+      return rejectWithValue(normalizeApiError(error));
+    }
+  },
+);
+
+export const fetchIncomingBookingRequests = createAsyncThunk(
+  'interview/fetchIncomingBookingRequests',
+  async (status = 'PENDING', { rejectWithValue }) => {
+    try {
+      const rawItems = await interviewApi.getIncomingBookingRequests(status);
+      const studentMap = await loadProfileMapByIds(
+        rawItems.map((item) => item.studentId),
+        'Candidate',
+      );
+
+      const items = rawItems.map((item) => {
+        const studentProfile =
+          studentMap.get(item.studentId) ||
+          buildFallbackProfile(item.studentId, 'Candidate');
+
+        return {
+          ...item,
+          studentName: studentProfile.fullName || 'Candidate',
+          studentHeadline: studentProfile.headline || '',
+        };
+      });
+
+      return {
+        items,
+        filter: status,
+      };
+    } catch (error) {
+      return rejectWithValue(normalizeApiError(error));
+    }
+  },
+);
+
+export const confirmIncomingBooking = createAsyncThunk(
+  'interview/confirmIncomingBooking',
   async (bookingId, { rejectWithValue }) => {
     try {
-      const data = await getSessionByBookingId(bookingId);
-      return { bookingId, data };
+      return await interviewApi.confirmBooking(bookingId);
     } catch (error) {
-      return rejectWithValue(extractApiMessage(error));
+      return rejectWithValue(normalizeApiError(error));
     }
-  }
+  },
 );
+
+export const fetchMyBookings = createAsyncThunk(
+  'interview/fetchMyBookings',
+  async (_, { rejectWithValue }) => {
+    try {
+      const rawItems = await interviewApi.getMyBookings();
+      const interviewerMap = await loadProfileMapByIds(
+        rawItems.map((item) => item.interviewerId),
+        'Interviewer',
+      );
+
+      return rawItems.map((item) => {
+        const interviewerProfile =
+          interviewerMap.get(item.interviewerId) ||
+          buildFallbackProfile(item.interviewerId, 'Interviewer');
+
+        return {
+          ...item,
+          interviewerName: interviewerProfile.fullName || 'Interviewer',
+          interviewerHeadline: interviewerProfile.headline || '',
+        };
+      });
+    } catch (error) {
+      return rejectWithValue(normalizeApiError(error));
+    }
+  },
+);
+
+export const fetchBookingSession = createAsyncThunk(
+  'interview/fetchBookingSession',
+  async (bookingId, { rejectWithValue }) => {
+    try {
+      return await interviewApi.getSession(bookingId);
+    } catch (error) {
+      return rejectWithValue(normalizeApiError(error));
+    }
+  },
+);
+
+const initialState = createInitialState();
 
 const interviewSlice = createSlice({
-  name: "interview",
-  initialState: {
-    openSlots: [],
-    openSlotsStatus: "idle",
-    openSlotsError: "",
-
-    createSlotStatus: "idle",
-    bookSlotStatus: "idle",
-    confirmStatus: "idle",
-    sessionStatus: "idle",
-
-    recentCreatedSlot: null,
-    recentBooking: null,
-    recentConfirmedSession: null,
-
-    sessionsByBookingId: {},
-    error: "",
-  },
+  name: 'interview',
+  initialState,
   reducers: {
-    interviewStateCleared(state) {
-      state.openSlots = [];
-      state.openSlotsStatus = "idle";
-      state.openSlotsError = "";
-      state.createSlotStatus = "idle";
-      state.bookSlotStatus = "idle";
-      state.confirmStatus = "idle";
-      state.sessionStatus = "idle";
-      state.recentCreatedSlot = null;
-      state.recentBooking = null;
-      state.recentConfirmedSession = null;
-      state.sessionsByBookingId = {};
-      state.error = "";
+    clearInterviewMutation(state) {
+      state.mutation = {
+        status: 'idle',
+        error: null,
+        kind: null,
+      };
+    },
+    clearSessionLookup(state) {
+      state.sessionLookup = {
+        data: null,
+        status: 'idle',
+        error: null,
+      };
+    },
+    resetInterviewState() {
+      return createInitialState();
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchOpenSlots.pending, (state) => {
-        state.openSlotsStatus = "loading";
-        state.openSlotsError = "";
+      .addCase(fetchMarketplace.pending, (state) => {
+        state.marketplace.status = 'loading';
+        state.marketplace.error = null;
       })
-      .addCase(fetchOpenSlots.fulfilled, (state, action) => {
-        state.openSlotsStatus = "succeeded";
-        state.openSlots = action.payload;
+      .addCase(fetchMarketplace.fulfilled, (state, action) => {
+        state.marketplace.status = 'succeeded';
+        state.marketplace.items = action.payload.items;
+        state.marketplace.lastQuery = action.payload.lastQuery;
       })
-      .addCase(fetchOpenSlots.rejected, (state, action) => {
-        state.openSlotsStatus = "failed";
-        state.openSlotsError = action.payload || "Failed to load open slots";
-      })
-
-      .addCase(submitCreateSlot.pending, (state) => {
-        state.createSlotStatus = "loading";
-        state.error = "";
-      })
-      .addCase(submitCreateSlot.fulfilled, (state, action) => {
-        state.createSlotStatus = "succeeded";
-        state.recentCreatedSlot = action.payload;
-        state.openSlots = [action.payload, ...state.openSlots];
-      })
-      .addCase(submitCreateSlot.rejected, (state, action) => {
-        state.createSlotStatus = "failed";
-        state.error = action.payload || "Failed to create slot";
+      .addCase(fetchMarketplace.rejected, (state, action) => {
+        state.marketplace.status = 'failed';
+        state.marketplace.error = action.payload || null;
       })
 
-      .addCase(submitBookSlot.pending, (state) => {
-        state.bookSlotStatus = "loading";
-        state.error = "";
+      .addCase(fetchMySlots.pending, (state) => {
+        state.mySlots.status = 'loading';
+        state.mySlots.error = null;
       })
-      .addCase(submitBookSlot.fulfilled, (state, action) => {
-        state.bookSlotStatus = "succeeded";
-        state.recentBooking = action.payload;
-        state.openSlots = state.openSlots.filter((s) => s.id !== action.payload.slotId);
+      .addCase(fetchMySlots.fulfilled, (state, action) => {
+        state.mySlots.status = 'succeeded';
+        state.mySlots.items = action.payload;
       })
-      .addCase(submitBookSlot.rejected, (state, action) => {
-        state.bookSlotStatus = "failed";
-        state.error = action.payload || "Failed to book slot";
-      })
-
-      .addCase(submitConfirmBooking.pending, (state) => {
-        state.confirmStatus = "loading";
-        state.error = "";
-      })
-      .addCase(submitConfirmBooking.fulfilled, (state, action) => {
-        state.confirmStatus = "succeeded";
-        state.recentConfirmedSession = action.payload;
-      })
-      .addCase(submitConfirmBooking.rejected, (state, action) => {
-        state.confirmStatus = "failed";
-        state.error = action.payload || "Failed to confirm booking";
+      .addCase(fetchMySlots.rejected, (state, action) => {
+        state.mySlots.status = 'failed';
+        state.mySlots.error = action.payload || null;
       })
 
-      .addCase(fetchSessionByBookingId.pending, (state) => {
-        state.sessionStatus = "loading";
-        state.error = "";
+      .addCase(fetchIncomingBookingRequests.pending, (state) => {
+        state.incomingRequests.status = 'loading';
+        state.incomingRequests.error = null;
       })
-      .addCase(fetchSessionByBookingId.fulfilled, (state, action) => {
-        state.sessionStatus = "succeeded";
-        state.sessionsByBookingId[action.payload.bookingId] = action.payload.data;
+      .addCase(fetchIncomingBookingRequests.fulfilled, (state, action) => {
+        state.incomingRequests.status = 'succeeded';
+        state.incomingRequests.items = action.payload.items;
+        state.incomingRequests.filter = action.payload.filter;
       })
-      .addCase(fetchSessionByBookingId.rejected, (state, action) => {
-        state.sessionStatus = "failed";
-        state.error = action.payload || "Failed to load session";
+      .addCase(fetchIncomingBookingRequests.rejected, (state, action) => {
+        state.incomingRequests.status = 'failed';
+        state.incomingRequests.error = action.payload || null;
+      })
+
+      .addCase(fetchMyBookings.pending, (state) => {
+        state.myBookings.status = 'loading';
+        state.myBookings.error = null;
+      })
+      .addCase(fetchMyBookings.fulfilled, (state, action) => {
+        state.myBookings.status = 'succeeded';
+        state.myBookings.items = action.payload;
+      })
+      .addCase(fetchMyBookings.rejected, (state, action) => {
+        state.myBookings.status = 'failed';
+        state.myBookings.error = action.payload || null;
+      })
+
+      .addCase(fetchBookingSession.pending, (state) => {
+        state.sessionLookup.status = 'loading';
+        state.sessionLookup.error = null;
+      })
+      .addCase(fetchBookingSession.fulfilled, (state, action) => {
+        state.sessionLookup.status = 'succeeded';
+        state.sessionLookup.data = action.payload;
+      })
+      .addCase(fetchBookingSession.rejected, (state, action) => {
+        state.sessionLookup.status = 'failed';
+        state.sessionLookup.error = action.payload || null;
+      })
+
+      .addCase(createAvailabilitySlot.pending, (state) => {
+        state.mutation.status = 'loading';
+        state.mutation.kind = 'create-slot';
+        state.mutation.error = null;
+      })
+      .addCase(createAvailabilitySlot.fulfilled, (state, action) => {
+        state.mutation.status = 'succeeded';
+        state.mutation.kind = 'create-slot';
+        state.mySlots.items = [action.payload, ...state.mySlots.items];
+      })
+      .addCase(createAvailabilitySlot.rejected, (state, action) => {
+        state.mutation.status = 'failed';
+        state.mutation.kind = 'create-slot';
+        state.mutation.error = action.payload || null;
+      })
+
+      .addCase(cancelAvailabilitySlot.pending, (state) => {
+        state.mutation.status = 'loading';
+        state.mutation.kind = 'cancel-slot';
+        state.mutation.error = null;
+      })
+      .addCase(cancelAvailabilitySlot.fulfilled, (state, action) => {
+        state.mutation.status = 'succeeded';
+        state.mutation.kind = 'cancel-slot';
+        state.mySlots.items = state.mySlots.items.map((slot) =>
+          slot.id === action.payload
+            ? {
+                ...slot,
+                status: 'CANCELLED',
+              }
+            : slot,
+        );
+      })
+      .addCase(cancelAvailabilitySlot.rejected, (state, action) => {
+        state.mutation.status = 'failed';
+        state.mutation.kind = 'cancel-slot';
+        state.mutation.error = action.payload || null;
+      })
+
+      .addCase(deleteAvailabilitySlot.pending, (state) => {
+        state.mutation.status = 'loading';
+        state.mutation.kind = 'delete-slot';
+        state.mutation.error = null;
+      })
+      .addCase(deleteAvailabilitySlot.fulfilled, (state, action) => {
+        state.mutation.status = 'succeeded';
+        state.mutation.kind = 'delete-slot';
+        state.mySlots.items = state.mySlots.items.filter((slot) => slot.id !== action.payload);
+      })
+      .addCase(deleteAvailabilitySlot.rejected, (state, action) => {
+        state.mutation.status = 'failed';
+        state.mutation.kind = 'delete-slot';
+        state.mutation.error = action.payload || null;
+      })
+
+      .addCase(bookMarketplaceSlot.pending, (state) => {
+        state.mutation.status = 'loading';
+        state.mutation.kind = 'book-slot';
+        state.mutation.error = null;
+      })
+      .addCase(bookMarketplaceSlot.fulfilled, (state) => {
+        state.mutation.status = 'succeeded';
+        state.mutation.kind = 'book-slot';
+      })
+      .addCase(bookMarketplaceSlot.rejected, (state, action) => {
+        state.mutation.status = 'failed';
+        state.mutation.kind = 'book-slot';
+        state.mutation.error = action.payload || null;
+      })
+
+      .addCase(confirmIncomingBooking.pending, (state) => {
+        state.mutation.status = 'loading';
+        state.mutation.kind = 'confirm-booking';
+        state.mutation.error = null;
+      })
+      .addCase(confirmIncomingBooking.fulfilled, (state) => {
+        state.mutation.status = 'succeeded';
+        state.mutation.kind = 'confirm-booking';
+      })
+      .addCase(confirmIncomingBooking.rejected, (state, action) => {
+        state.mutation.status = 'failed';
+        state.mutation.kind = 'confirm-booking';
+        state.mutation.error = action.payload || null;
       });
   },
 });
 
-export const { interviewStateCleared } = interviewSlice.actions;
+export const { clearInterviewMutation, clearSessionLookup, resetInterviewState } =
+  interviewSlice.actions;
+
 export default interviewSlice.reducer;

@@ -1,24 +1,15 @@
 import { configureStore } from '@reduxjs/toolkit';
+
 import authReducer from '../features/auth/authSlice';
 import profileReducer from '../features/profile/profileSlice';
-import interviewsReducer from '../features/interviews/interviewSlice';
-import { persistSelectedState } from '../lib/storage';
+import interviewReducer from '../features/interview/interviewSlice';
+import uiReducer from '../features/ui/uiSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     profile: profileReducer,
-    interviews: interviewsReducer,
+    interview: interviewReducer,
+    ui: uiReducer,
   },
-});
-
-store.subscribe(() => {
-  const state = store.getState();
-  persistSelectedState({
-    auth: {
-      accessToken: state.auth.accessToken,
-      refreshToken: state.auth.refreshToken,
-    },
-    workspace: state.interviews.workspace,
-  });
 });
