@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -19,8 +20,14 @@ export default function AppShell() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user, status } = useSelector((state) => state.auth);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const closeSidebar = () => {
+    setIsSidebarOpen(false);
+  };
 
   const handleLogout = async () => {
+    closeSidebar();
     await dispatch(logoutUser());
     dispatch(resetProfileState());
     dispatch(resetInterviewState());
@@ -37,12 +44,17 @@ export default function AppShell() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <div
+        className={`sidebar-backdrop ${isSidebarOpen ? 'sidebar-backdrop--open' : ''}`}
+        onClick={closeSidebar}
+        aria-hidden={!isSidebarOpen}
+      />
+
+      <aside className={`sidebar ${isSidebarOpen ? 'sidebar--open' : ''}`}>
         <div className="brand-block">
           <div className="brand-badge">MB</div>
           <div>
             <h1>MockBridge</h1>
-            <p>Mock interview workflow</p>
           </div>
         </div>
 
@@ -51,6 +63,7 @@ export default function AppShell() {
             <NavLink
               key={item.to}
               to={item.to}
+              onClick={closeSidebar}
               className={({ isActive }) =>
                 `sidebar-link ${isActive ? 'sidebar-link--active' : ''}`
               }
@@ -65,7 +78,6 @@ export default function AppShell() {
             <span className="badge">{user?.role || 'USER'}</span>
             <div>
               <strong>{user?.email || 'Signed in user'}</strong>
-              <p>Authenticated through gateway</p>
             </div>
           </div>
 
@@ -82,12 +94,52 @@ export default function AppShell() {
 
       <main className="main-shell">
         <header className="page-topbar">
-          <div>
-            <p className="eyebrow">Microservice frontend</p>
-            <h2>Welcome back</h2>
-          </div>
-          <div className="topbar-note">
-            Gateway-authenticated workspace with profile, booking, and session flows.
+          <div className="page-topbar__left">
+            <button
+              type="button"
+              className="menu-toggle"
+              onClick={() => setIsSidebarOpen((current) => !current)}
+              aria-label={isSidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={isSidebarOpen}
+            >
+              {isSidebarOpen ? (
+                <svg
+                  viewBox="0 0 24 24"
+                  width="22"
+                  height="22"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M6 6L18 18M18 6L6 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  viewBox="0 0 24 24"
+                  width="22"
+                  height="22"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M4 7H20M4 12H20M4 17H20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )}
+            </button>
+
+            <div>
+              <h2>Welcome back</h2>
+            </div>
           </div>
         </header>
 

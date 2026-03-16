@@ -219,13 +219,19 @@ function createInitialState() {
 
 export const fetchMarketplace = createAsyncThunk(
   'interview/fetchMarketplace',
-  async (searchText = '', { rejectWithValue }) => {
+  async (searchText = '', { getState, rejectWithValue }) => {
     try {
       const query = String(searchText || '').trim();
       const normalizedQuery = normalizeSearchValue(query);
+      const currentUserId = getState().auth.user?.userId || null;
 
       const openSlots = await interviewApi.getOpenSlots();
-      const sortedSlots = [...openSlots].sort(compareStartTimes);
+
+      const filteredOpenSlots = currentUserId
+        ? openSlots.filter((slot) => slot.interviewerId !== currentUserId)
+        : openSlots;
+
+      const sortedSlots = [...filteredOpenSlots].sort(compareStartTimes);
       const groupedSlots = groupSlotsByInterviewer(sortedSlots);
       const slotInterviewerIds = [
         ...new Set(sortedSlots.map((slot) => slot.interviewerId).filter(Boolean)),
@@ -237,7 +243,12 @@ export const fetchMarketplace = createAsyncThunk(
         searchProfiles = await userApi.searchInterviewers(query).catch(() => []);
       }
 
-      const mergedSearchProfiles = dedupeProfilesByUserId(searchProfiles);
+      const mergedSearchProfiles = dedupeProfilesByUserId(
+        currentUserId
+          ? searchProfiles.filter((profile) => profile?.userId !== currentUserId)
+          : searchProfiles,
+      );
+
       const allInterviewerIds = [
         ...new Set([
           ...slotInterviewerIds,

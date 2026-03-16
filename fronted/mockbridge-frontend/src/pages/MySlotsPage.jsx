@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,6 +34,8 @@ const initialForm = {
   endLocal: '',
 };
 
+const SLOTS_PER_PAGE = 3;
+
 export default function MySlotsPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -48,6 +50,7 @@ export default function MySlotsPage() {
   const [slotAction, setSlotAction] = useState(null);
   const [sessionReady, setSessionReady] = useState(null);
   const [joiningBookingId, setJoiningBookingId] = useState(null);
+  const [slotPage, setSlotPage] = useState(1);
 
   useEffect(() => {
     if (mySlots.status === 'idle') {
@@ -58,6 +61,23 @@ export default function MySlotsPage() {
   useEffect(() => {
     dispatch(fetchIncomingBookingRequests(requestFilter));
   }, [dispatch, requestFilter]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(mySlots.items.length / SLOTS_PER_PAGE));
+    if (slotPage > totalPages) {
+      setSlotPage(totalPages);
+    }
+  }, [mySlots.items.length, slotPage]);
+
+  const paginatedSlots = useMemo(() => {
+    const startIndex = (slotPage - 1) * SLOTS_PER_PAGE;
+    return mySlots.items.slice(startIndex, startIndex + SLOTS_PER_PAGE);
+  }, [mySlots.items, slotPage]);
+
+  const totalSlotPages = useMemo(
+    () => Math.max(1, Math.ceil(mySlots.items.length / SLOTS_PER_PAGE)),
+    [mySlots.items.length],
+  );
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -79,6 +99,7 @@ export default function MySlotsPage() {
       ).unwrap();
 
       await dispatch(fetchMySlots());
+      setSlotPage(1);
 
       dispatch(
         addToast({
@@ -294,7 +315,7 @@ export default function MySlotsPage() {
           ) : null}
 
           <div className="stack">
-            {mySlots.items.map((slot) => (
+            {paginatedSlots.map((slot) => (
               <div key={slot.id} className="list-card">
                 <div>
                   <strong>{utcRangeToLocalLabel(slot.startTimeUtc, slot.endTimeUtc)}</strong>
@@ -325,6 +346,34 @@ export default function MySlotsPage() {
               </div>
             ))}
           </div>
+
+          {mySlots.items.length > SLOTS_PER_PAGE ? (
+            <div className="button-row" style={{ marginTop: '16px', justifyContent: 'space-between' }}>
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() => setSlotPage((current) => Math.max(1, current - 1))}
+                disabled={slotPage === 1}
+              >
+                Previous
+              </button>
+
+              <span className="badge">
+                Page {slotPage} of {totalSlotPages}
+              </span>
+
+              <button
+                type="button"
+                className="button button--ghost"
+                onClick={() =>
+                  setSlotPage((current) => Math.min(totalSlotPages, current + 1))
+                }
+                disabled={slotPage === totalSlotPages}
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
         </article>
       </section>
 

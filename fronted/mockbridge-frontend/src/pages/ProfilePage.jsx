@@ -56,6 +56,22 @@ export default function ProfilePage() {
 
   const isCreating = useMemo(() => !profile || notFound, [notFound, profile]);
 
+  const profileStrength = useMemo(() => {
+    if (!profile) {
+      return 0;
+    }
+
+    let score = 0;
+
+    if (profile.fullName) score += 25;
+    if (profile.headline) score += 20;
+    if (profile.bio) score += 20;
+    if ((profile.skills || []).length) score += 20;
+    if ((profile.yearsOfExperience || 0) > 0) score += 15;
+
+    return score;
+  }, [profile]);
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({
@@ -360,16 +376,67 @@ export default function ProfilePage() {
         <article className="card">
           <div className="card__header">
             <div>
-              <p className="eyebrow">Visible data</p>
-              <h2>What the UI shows</h2>
+              <p className="eyebrow">Profile insights</p>
+              <h2>Strengthen your profile</h2>
             </div>
+            <span className="badge">{profileStrength}% ready</span>
           </div>
 
-          <ul className="bullet-list">
-            <li>Your email and role can be shown in a human-friendly way.</li>
-            <li>Internal ids are never rendered in cards, tables, URLs, or popups.</li>
-            <li>Skills are manageable without exposing backend identifiers.</li>
-          </ul>
+          <div className="stack">
+            <div className="list-row">
+              <div>
+                <strong>{profile?.fullName ? 'Name added' : 'Add your full name'}</strong>
+                <p>
+                  {profile?.fullName
+                    ? 'Your identity is clearly visible across the platform.'
+                    : 'A complete name improves trust and profile quality.'}
+                </p>
+              </div>
+              <span>{profile?.fullName ? 'Done' : 'Pending'}</span>
+            </div>
+
+            <div className="list-row">
+              <div>
+                <strong>{profile?.headline ? 'Headline added' : 'Add a headline'}</strong>
+                <p>
+                  {profile?.headline
+                    ? 'Your specialization is easier to understand at a glance.'
+                    : 'A short headline helps users know your expertise quickly.'}
+                </p>
+              </div>
+              <span>{profile?.headline ? 'Done' : 'Pending'}</span>
+            </div>
+
+            <div className="list-row">
+              <div>
+                <strong>
+                  {(profile?.skills || []).length
+                    ? `${profile.skills.length} skills listed`
+                    : 'Add your first skill'}
+                </strong>
+                <p>
+                  {(profile?.skills || []).length
+                    ? 'Your skill set is visible and improves search discovery.'
+                    : 'Skills help others find you in search and booking flows.'}
+                </p>
+              </div>
+              <span>{(profile?.skills || []).length ? 'Ready' : 'Pending'}</span>
+            </div>
+
+            <div className="list-row">
+              <div>
+                <strong>
+                  {(profile?.bio || '').trim() ? 'Bio completed' : 'Complete your bio'}
+                </strong>
+                <p>
+                  {(profile?.bio || '').trim()
+                    ? 'Your background and experience now add more credibility.'
+                    : 'A clear bio makes your profile look more complete and professional.'}
+                </p>
+              </div>
+              <span>{(profile?.bio || '').trim() ? 'Done' : 'Pending'}</span>
+            </div>
+          </div>
         </article>
       </section>
 

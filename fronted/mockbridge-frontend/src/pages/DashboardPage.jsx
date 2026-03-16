@@ -191,17 +191,51 @@ export default function DashboardPage() {
         <article className="card">
           <div className="card__header">
             <div>
-              <p className="eyebrow">Auth session</p>
-              <h2>Security behavior</h2>
+              <p className="eyebrow">Highlights</p>
+              <h2>Quick workspace summary</h2>
             </div>
           </div>
 
-          <ul className="bullet-list">
-            <li>Access token is attached automatically to protected requests.</li>
-            <li>401 responses trigger one refresh flow and replay the failed request.</li>
-            <li>When refresh fails, the user is logged out and receives a popup notice.</li>
-            <li>Protected pages restore the last valid signed-in session on refresh.</li>
-          </ul>
+          <div className="stack">
+            <div className="list-row">
+              <div>
+                <strong>{profileState.profile ? 'Profile completed' : 'Profile pending'}</strong>
+                <p>
+                  {profileState.profile
+                    ? 'Your public profile is ready for marketplace visibility.'
+                    : 'Complete your profile to unlock a stronger presence in the platform.'}
+                </p>
+              </div>
+              <span>{profileState.profile ? 'Ready' : 'Pending'}</span>
+            </div>
+
+            <div className="list-row">
+              <div>
+                <strong>{bookingState.items.length} booked interviews</strong>
+                <p>Review confirmed sessions and join them directly from your bookings page.</p>
+              </div>
+              <span>Bookings</span>
+            </div>
+
+            <div className="list-row">
+              <div>
+                <strong>{slotState.items.length} created slots</strong>
+                <p>Manage your time blocks and keep your interview availability updated.</p>
+              </div>
+              <span>Slots</span>
+            </div>
+
+            <div className="list-row">
+              <div>
+                <strong>
+                  {requestState.items.filter((item) => item.bookingStatus === 'PENDING').length}{' '}
+                  pending requests
+                </strong>
+                <p>Respond quickly to booking requests to keep your schedule active.</p>
+              </div>
+              <span>Requests</span>
+            </div>
+          </div>
         </article>
       </section>
     </div>
