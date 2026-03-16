@@ -5,9 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import Loader from '../components/common/Loader';
 import EmptyState from '../components/common/EmptyState';
 import ErrorBlock from '../components/common/ErrorBlock';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 
 import {
+  cancelStudentBooking,
   fetchBookingSession,
+  fetchMarketplace,
   fetchMyBookings,
 } from '../features/interview/interviewSlice';
 import { addToast } from '../features/ui/uiSlice';
@@ -24,8 +27,10 @@ export default function MyBookingsPage() {
 
   const myBookings = useSelector((state) => state.interview.myBookings);
   const sessionLookup = useSelector((state) => state.interview.sessionLookup);
+  const mutation = useSelector((state) => state.interview.mutation);
 
   const [joiningBookingId, setJoiningBookingId] = useState(null);
+  const [bookingToCancel, setBookingToCancel] = useState(null);
 
   useEffect(() => {
     if (myBookings.status === 'idle') {
@@ -69,6 +74,39 @@ export default function MyBookingsPage() {
       );
     } finally {
       setJoiningBookingId(null);
+    }
+  };
+
+  const handleCancelBooking = async () => {
+    if (!bookingToCancel) {
+      return;
+    }
+
+    try {
+      await dispatch(cancelStudentBooking(bookingToCancel.bookingId)).unwrap();
+      await dispatch(fetchMyBookings());
+      await dispatch(fetchMarketplace(''));
+
+      dispatch(
+        addToast({
+          type: 'success',
+          title: 'Booking cancelled',
+          message: 'Your booking has been cancelled successfully.',
+        }),
+      );
+    } catch (submitError) {
+      dispatch(
+        addToast({
+          type: 'error',
+          title: 'Cancel failed',
+          message: getErrorMessage(
+            submitError,
+            'Unable to cancel this booking right now.',
+          ),
+        }),
+      );
+    } finally {
+      setBookingToCancel(null);
     }
   };
 
@@ -118,27 +156,64 @@ export default function MyBookingsPage() {
                 <p>Status: {booking.bookingStatus}</p>
               </div>
 
-              {booking.bookingStatus === 'CONFIRMED' ? (
-                <button
-                  type="button"
-                  className="button button--primary"
-                  disabled={
-                    joiningBookingId === booking.bookingId &&
-                    sessionLookup.status === 'loading'
-                  }
-                  onClick={() => handleJoinSession(booking)}
-                >
-                  {joiningBookingId === booking.bookingId && sessionLookup.status === 'loading'
-                    ? 'Joining...'
-                    : 'Join session'}
-                </button>
-              ) : (
-                <span className="badge badge--muted">{booking.bookingStatus}</span>
-              )}
+              <div className="button-row">
+                {booking.bookingStatus === 'CONFIRMED' ? (
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    disabled={
+                      joiningBookingId === booking.bookingId &&
+                      sessionLookup.status === 'loading'
+                    }
+                    onClick={() => handleJoinSession(booking)}
+                  >
+                    {joiningBookingId === booking.bookingId && sessionLookup.status === 'loading'
+                      ? 'Joining...'
+                      : 'Join session'}
+                  </button>
+                ) : null}
+
+                {(booking.bookingStatus === 'PENDING' || booking.bookingStatus === 'CONFIRMED') ? (
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    disabled={
+                      mutation.status === 'loading' &&
+                      mutation.kind === 'cancel-booking'
+                    }
+                    onClick={() => setBookingToCancel(booking)}
+                  >
+                    {mutation.status === 'loading' && mutation.kind === 'cancel-booking'
+                      ? 'Cancelling...'
+                      : 'Cancel booking'}
+                  </button>
+                ) : null}
+
+                {booking.bookingStatus !== 'PENDING' && booking.bookingStatus !== 'CONFIRMED' ? (
+                  <span className="badge badge--muted">{booking.bookingStatus}</span>
+                ) : null}
+              </div>
             </div>
           ))}
         </div>
       </section>
+
+      <ConfirmDialog
+        open={Boolean(bookingToCancel)}
+        title="Cancel booking?"
+        description={
+          bookingToCancel
+            ? `Cancel your booking for ${utcRangeToLocalLabel(
+                bookingToCancel.startTimeUtc,
+                bookingToCancel.endTimeUtc,
+              )}?`
+            : ''
+        }
+        confirmLabel="Cancel booking"
+        isLoading={mutation.status === 'loading' && mutation.kind === 'cancel-booking'}
+        onConfirm={handleCancelBooking}
+        onClose={() => setBookingToCancel(null)}
+      />
     </div>
   );
 }

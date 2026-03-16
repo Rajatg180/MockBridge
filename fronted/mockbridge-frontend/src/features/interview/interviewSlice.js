@@ -314,6 +314,18 @@ export const bookMarketplaceSlot = createAsyncThunk(
   },
 );
 
+export const cancelStudentBooking = createAsyncThunk(
+  'interview/cancelStudentBooking',
+  async (bookingId, { rejectWithValue }) => {
+    try {
+      await interviewApi.cancelMyBooking(bookingId);
+      return bookingId;
+    } catch (error) {
+      return rejectWithValue(normalizeApiError(error));
+    }
+  },
+);
+
 export const fetchMySlots = createAsyncThunk(
   'interview/fetchMySlots',
   async (_, { rejectWithValue }) => {
@@ -601,6 +613,29 @@ const interviewSlice = createSlice({
       .addCase(bookMarketplaceSlot.rejected, (state, action) => {
         state.mutation.status = 'failed';
         state.mutation.kind = 'book-slot';
+        state.mutation.error = action.payload || null;
+      })
+
+      .addCase(cancelStudentBooking.pending, (state) => {
+        state.mutation.status = 'loading';
+        state.mutation.kind = 'cancel-booking';
+        state.mutation.error = null;
+      })
+      .addCase(cancelStudentBooking.fulfilled, (state, action) => {
+        state.mutation.status = 'succeeded';
+        state.mutation.kind = 'cancel-booking';
+        state.myBookings.items = state.myBookings.items.map((booking) =>
+          booking.bookingId === action.payload
+            ? {
+                ...booking,
+                bookingStatus: 'CANCELLED',
+              }
+            : booking,
+        );
+      })
+      .addCase(cancelStudentBooking.rejected, (state, action) => {
+        state.mutation.status = 'failed';
+        state.mutation.kind = 'cancel-booking';
         state.mutation.error = action.payload || null;
       })
 

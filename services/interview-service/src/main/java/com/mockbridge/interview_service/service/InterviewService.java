@@ -78,6 +78,11 @@ public class InterviewService {
             throw new IllegalArgumentException("Slot is not open");
         }
 
+        // Students cannot book their own slots
+        if (slot.getInterviewerId().equals(studentId)) {
+            throw new IllegalArgumentException("You cannot book your own slot");
+        }
+
         Booking booking = new Booking();
         booking.setId(UUID.randomUUID());
         booking.setSlot(slot);
@@ -142,6 +147,37 @@ public class InterviewService {
                 session.getRoomId(),
                 session.getSessionStatus().name()
         );
+    }
+
+    @Transactional
+    public void cancelMyBooking(UUID studentId, UUID bookingId) {
+        Booking booking = bookingRepo.findById(bookingId)
+                .orElseThrow(() -> new IllegalArgumentException("Booking not found"));
+
+        if (!booking.getStudentId().equals(studentId)) {
+            throw new IllegalArgumentException("You do not own this booking");
+        }
+
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            return;
+        }
+
+        if (booking.getStatus() != BookingStatus.PENDING && booking.getStatus() != BookingStatus.CONFIRMED) {
+            throw new IllegalArgumentException("Only PENDING or CONFIRMED bookings can be cancelled");
+        }
+
+        AvailabilitySlot slot = booking.getSlot();
+
+        booking.setStatus(BookingStatus.CANCELLED);
+        booking.setUpdatedAt(LocalDateTime.now());
+        bookingRepo.save(booking);
+
+        if (slot.getStatus() == SlotStatus.BOOKED) {
+            slot.setStatus(SlotStatus.OPEN);
+            slotRepo.save(slot);
+        }
+
+        sessionRepo.findByBooking_Id(bookingId).ifPresent(sessionRepo::delete);
     }
 
     @Transactional(readOnly = true)
@@ -249,11 +285,6 @@ public class InterviewService {
                 .toList();
     }
 
-    /**
-     * Cancel slot.
-     * BOOKED slots should be cancelled, not deleted.
-     * This preserves history and blocks future joining.
-     */
     @Transactional
     public void cancelSlot(UUID interviewerId, UUID slotId) {
         AvailabilitySlot slot = slotRepo.findById(slotId)
@@ -279,11 +310,6 @@ public class InterviewService {
         });
     }
 
-    /**
-     * Hard delete slot.
-     * Only OPEN or CANCELLED slots can be deleted.
-     * BOOKED slots must be cancelled instead.
-     */
     @Transactional
     public void deleteSlot(UUID interviewerId, UUID slotId) {
         AvailabilitySlot slot = slotRepo.findById(slotId)

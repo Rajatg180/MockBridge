@@ -54,6 +54,13 @@ public class InterviewController {
         return service.confirmBooking(auth.getUserId(), bookingId);
     }
 
+    @DeleteMapping("/bookings/{bookingId}/cancel")
+    public ResponseEntity<Void> cancelMyBooking(HttpServletRequest request, @PathVariable UUID bookingId) {
+        GatewayAuth auth = requireAuth(request);
+        service.cancelMyBooking(auth.getUserId(), bookingId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/bookings/{bookingId}/session")
     public SessionResponse getSession(HttpServletRequest request, @PathVariable UUID bookingId) {
         GatewayAuth auth = requireAuth(request);

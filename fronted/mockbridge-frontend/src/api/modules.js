@@ -97,6 +97,10 @@ export const interviewApi = {
       .then((response) => response.data);
   },
 
+  cancelMyBooking(bookingId) {
+    return apiClient.delete(`/interviews/bookings/${bookingId}/cancel`);
+  },
+
   getIncomingBookingRequests(status = 'PENDING') {
     return apiClient
       .get('/interviews/me/booking-requests', {
